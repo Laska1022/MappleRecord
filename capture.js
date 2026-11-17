@@ -8,7 +8,7 @@ function captureForm(portalValues) {
     '[aria-hidden="true"]', ".wb-inv", ".sr-only", ".visually-hidden",
     ".modal", ".modal-dialog", ".help-block", "#validationErrors", "script", "style", "template"
   ].join(",");
-  const control = "input, select, textarea, [contenteditable=true], [role=combobox]";
+  const control = 'input, select, textarea, [contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [role=combobox]';
   const skipTypes = new Set(["hidden", "password", "file", "submit", "reset", "button", "image", "search"]);
   const summary = ".form-control-static, .question-answer, .question-value, .answer, output, .form-control:not(input):not(select):not(textarea)";
   const normalize = value => (value || "").replace(/\s+/g, " ").trim();
@@ -18,15 +18,20 @@ function captureForm(portalValues) {
       getComputedStyle(node).visibility === "visible";
   }
 
-  function readable(node) {
+  function readable(node, allowRootControl = false) {
     const tokens = [];
     function visit(part) {
       if (part.nodeType === Node.TEXT_NODE) {
         tokens.push(part.textContent);
-      } else if (part.nodeType === Node.ELEMENT_NODE && !part.matches(ignore + ",button,[role=button]," + control)) {
-        if (part.tagName === "BR") tokens.push(" ");
+      } else if (part.nodeType === Node.ELEMENT_NODE) {
+        if (part.matches(ignore + ",button,[role=button]") ||
+            (part.matches(control) && !(allowRootControl && part === node))) return;
         if (part !== node && !visible(part)) return;
+        // Preserve rendered line boundaries without splitting adjacent inline text.
+        const block = /^(block|flow-root|list-item|flex|grid|table(?:-.+)?)$/.test(getComputedStyle(part).display);
+        if (block || part.tagName === "BR") tokens.push(" ");
         for (const child of part.childNodes) visit(child);
+        if (block) tokens.push(" ");
       }
     }
     if (node) visit(node);
@@ -51,7 +56,7 @@ function captureForm(portalValues) {
 
   function label(node) {
     return labelledBy(node) || normalize(node.getAttribute("aria-label")) ||
-      [...(node.labels || [])].map(readable).filter(Boolean).join(" ");
+      [...(node.labels || [])].map(node => readable(node)).filter(Boolean).join(" ");
   }
 
   function portalLabel(node, allowOptionLabel = true) {
@@ -74,12 +79,16 @@ function captureForm(portalValues) {
     return !skipTypes.has(node.type) && !credential(node) && visible(node);
   }
 
+  function hasVisibleControl(node) {
+    return node && [...node.querySelectorAll(control)].some(safeControl);
+  }
+
   function answer(node) {
     if (node.matches('[role="combobox"]') && !node.matches("input,select")) {
-      const input = node.querySelector("input,select");
-      if (input) return safeControl(input) ? answer(input) : "";
-      const selected = node.querySelector('[aria-selected="true"]');
-      return normalize(node.getAttribute("aria-valuetext") || selected?.innerText || node.innerText);
+      const input = [...node.querySelectorAll("input,select")].find(safeControl);
+      if (input) return answer(input);
+      const selected = [...node.querySelectorAll('[aria-selected="true"]')].find(visible);
+      return normalize(node.getAttribute("aria-valuetext")) || readable(selected) || readable(node, true);
     }
     if (node.tagName === "SELECT") {
       return [...node.selectedOptions].filter(option => option.value !== "" && option.value !== "-1")
@@ -95,7 +104,10 @@ function captureForm(portalValues) {
   }
 
   function cellText(cell) {
-    const pieces = [readable(cell), ...[...cell.querySelectorAll(control)].filter(safeControl).map(answer)].filter(Boolean);
+    if (cell.matches(control) && safeControl(cell)) return answer(cell);
+    const controls = [...cell.querySelectorAll(control)]
+      .filter(node => safeControl(node) && !node.parentElement?.closest(control));
+    const pieces = [readable(cell), ...controls.map(answer)].filter(Boolean);
     if (pieces.length) return pieces.join(" ");
     // Older e-APR grids keep the lookup identifier inside an otherwise empty visible cell.
     const coded = cell.querySelector("input[data-lovid]");
@@ -150,7 +162,7 @@ function captureForm(portalValues) {
       const values = [];
       let sibling = node.nextElementSibling;
       while (sibling?.tagName === "DD") {
-        if (visible(sibling) && !sibling.querySelector(control)) {
+        if (visible(sibling) && !hasVisibleControl(sibling)) {
           values.push(readable(sibling));
           handled.add(sibling);
           sibling.querySelectorAll(summary).forEach(child => handled.add(child));
@@ -161,12 +173,13 @@ function captureForm(portalValues) {
     } else if (node.matches(".question-label")) {
       const sibling = node.nextElementSibling;
       const group = node.closest(".eapp-question-and-answer, .form-group");
-      const structured = [control, summary, "table,dl,button,label,.eapp-question-and-answer,.question-label,.question-description,.help-block"].join(",");
-      if (!group?.querySelector(control) && sibling && visible(sibling) && !sibling.matches(structured) && !sibling.querySelector(structured)) {
+      const structured = [summary, "table,dl,button,label,.eapp-question-and-answer,.question-label,.question-description,.help-block"].join(",");
+      if (!hasVisibleControl(group) && sibling && visible(sibling) && !hasVisibleControl(sibling) &&
+          !sibling.matches(control + "," + structured) && !sibling.querySelector(structured)) {
         const value = readable(sibling);
         if (value) add({ kind: "field", label: readable(node), value });
       }
-    } else if (!node.querySelector(control + "," + summary)) {
+    } else if (!hasVisibleControl(node) && !node.querySelector(summary)) {
       const name = label(node) || portalLabel(node) || readable(node.previousElementSibling);
       if (name) add({ kind: "field", label: name, value: readable(node) });
     }
