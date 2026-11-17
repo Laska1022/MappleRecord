@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Maple Record</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="shared.js"></script>
+  <script defer src="popup.js"></script>
+</head>
+<body class="popup">
+  <header class="brandbar">
+    <div class="brand"><img src="icons/record-48.png" width="35" height="35" alt="">Maple Record</div>
+    <span class="brand-context">Portal capture</span>
+  </header>
+  <main class="popup-main">
+    <h1>Capture a form</h1>
+    <p class="intro">Add the visible answers on this page to your PDF record.</p>
+    <div class="source-card">
+      <span class="page-icon" aria-hidden="true"></span>
+      <div><p class="caption">Current tab</p><strong id="site">Reading tab…</strong></div>
+    </div>
+    <button id="capture" class="primary full" disabled><span aria-hidden="true">＋</span> Capture this page</button>
+    <p class="feedback" id="feedback" role="status"></p>
+    <div class="record-link">
+      <div><p class="caption">Your record</p><strong id="count">Loading…</strong></div>
+      <button id="review" class="secondary">Review <span aria-hidden="true">→</span></button>
+    </div>
+  </main>
+  <footer class="popup-footer"><span class="status-dot" aria-hidden="true"></span> Captures stay in this browser session.</footer>
+</body>
+</html>

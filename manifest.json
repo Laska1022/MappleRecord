@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Maple Record",
+  "version": "1.0.0",
+  "minimum_chrome_version": "116",
+  "description": "Capture Canadian immigration portal forms, review their answers and save a personal PDF record.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Maple Record", "default_popup": "popup.html" },
+  "options_ui": { "page": "review.html", "open_in_tab": true },
+  "icons": {
+    "16": "icons/record-16.png",
+    "32": "icons/record-32.png",
+    "48": "icons/record-48.png",
+    "128": "icons/record-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  }
+}
