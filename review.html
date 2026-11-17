@@ -1,60 +1,45 @@
 <!doctype html>
 <html lang="en-CA">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Application record</title>
   <link rel="stylesheet" href="styles.css">
-  <script defer src="shared.js"></script>
-  <script defer src="review.js"></script>
+  <script defer src="shared.js"></script><script defer src="document-view.js"></script><script defer src="review.js"></script>
 </head>
 <body class="review">
   <header class="brandbar screen">
-    <div class="brand"><img src="icons/record-48.png" width="35" height="35" alt="">Maple Record</div>
-    <span class="brand-context">PDF workspace</span>
+    <div class="brand"><img src="icons/record-48.png" width="32" height="32" alt="">Maple Record</div>
+    <nav class="steps" aria-label="Workflow"><span>01 Capture</span><strong aria-current="step">02 Review</strong><span>03 Export</span></nav>
   </header>
   <div class="workspace">
     <aside class="sidebar screen">
-      <div class="sidebar-head"><h2>Captured pages</h2><span class="count" id="page-count">0</span></div>
-      <nav id="outline" aria-label="Captured pages"></nav>
-      <div class="session-note">
-        <strong><span class="status-dot" aria-hidden="true"></span> Browser session</strong>
-        <p>Save your PDF before restarting the browser.</p>
-        <button class="text-button danger" id="clear" hidden>Clear record</button>
-      </div>
+      <div class="sidebar-head"><h2>Your captures</h2><span class="count" id="page-count">0</span></div>
+      <nav id="outline" aria-label="Captured forms and versions"></nav>
+      <p class="sidebar-hint">Capture each form from the extension icon. Previous versions stay here until you remove them.</p>
+      <button class="text-button danger" id="clear" hidden>Clear record</button>
     </aside>
     <main>
       <div class="record-head">
-        <div class="record-heading">
-          <p class="eyebrow">Immigration forms</p>
-          <h1 id="record-title">Application record</h1>
-          <p id="summary" class="record-meta" aria-live="polite">Loading record…</p>
-        </div>
-        <div class="export screen"><button class="primary" id="print" disabled>Save as PDF <span aria-hidden="true">↗</span></button></div>
+        <div class="record-heading"><p class="eyebrow">Your personal copy</p><h1 id="record-title">Application record</h1><p id="summary" class="record-meta" aria-live="polite">Loading record…</p></div>
+        <button class="primary" id="print" disabled>Preview PDF</button>
       </div>
+      <div class="session-banner screen">
+        <div><strong><span class="status-dot" aria-hidden="true"></span> Saved for this browser session</strong><p>Keep a PDF or a draft before restarting Chrome or reloading the extension.</p></div>
+        <div class="draft-actions"><button class="secondary" id="save-draft" disabled>Download draft</button><button class="text-button" id="load-draft">Restore draft</button><input type="file" id="draft-file" accept=".json,application/json" hidden></div>
+      </div>
+      <p class="draft-note screen">Draft files contain your captured answers. Keep them somewhere private; they are not uploaded to a server.</p>
       <div id="tools" class="review-tools screen" hidden>
-        <p>Select the fields to include in your PDF.</p><button id="rename" class="text-button">Rename record</button>
+        <div class="search-row"><label class="search-label" for="search">Search questions and answers<input id="search" type="search" placeholder="Search your record…"></label><label for="filter">Show<select id="filter"><option value="all">All fields</option><option value="included">Included</option><option value="excluded">Excluded</option><option value="unanswered">Unanswered</option></select></label><button id="rename" class="text-button">Rename record</button></div>
+        <div class="toolbar-note"><p>Search changes the view. Checkboxes choose what goes into the PDF.</p><span id="search-count" role="status"></span><button id="reset-search" class="text-button" hidden>Clear filters</button></div>
       </div>
       <p class="feedback screen" id="feedback" role="status"></p>
       <div id="pages"></div>
-      <section id="empty" class="empty" hidden>
-        <span class="empty-page" aria-hidden="true"><i></i></span>
-        <h2>Your record is empty</h2>
-        <p>Open a portal form and expand the sections you need. Click the Maple Record extension icon and choose <strong>Capture this page</strong>.</p>
-      </section>
+      <p id="no-results" class="empty-results" hidden>No fields match. Try a different search or clear the filters.</p>
+      <section id="empty" class="empty" hidden><span class="empty-page" aria-hidden="true"></span><h2>Start with your first form</h2><p>Open a portal form and expand its sections. Choose <strong>Capture this page</strong> from the Maple Record extension, or restore a saved draft above.</p></section>
     </main>
   </div>
   <dialog id="edit-dialog" aria-labelledby="dialog-title" class="screen">
-    <form method="dialog">
-      <h2 id="dialog-title"></h2>
-      <p id="dialog-detail"></p>
-      <label for="title-input" id="title-label" hidden>Record title</label>
-      <input id="title-input" maxlength="160" autocomplete="off" hidden>
-      <div class="dialog-actions">
-        <button class="secondary" value="cancel" type="button" id="cancel">Cancel</button>
-        <button class="primary" value="confirm" id="confirm">Save title</button>
-      </div>
-    </form>
+    <form method="dialog"><h2 id="dialog-title"></h2><p id="dialog-detail"></p><label for="title-input" id="title-label" hidden>Record title</label><input id="title-input" maxlength="160" autocomplete="off" hidden><div class="dialog-actions"><button class="secondary" value="cancel" type="button" id="cancel">Cancel</button><button class="primary" value="confirm" id="confirm">Save title</button></div></form>
   </dialog>
 </body>
 </html>

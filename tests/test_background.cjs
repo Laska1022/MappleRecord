@@ -70,3 +70,52 @@ test('quota error returns save-and-clear guidance',async()=>{
 test('rejects another extension sender',()=>{
   const w=worker();let replied=false;assert.equal(w.listener({type:'clear'},{id:'other-extension'},()=>replied=true),false);assert.equal(replied,false);
 });
+
+test('capture returns its summary and duplicate review target',async()=>{
+  const w=worker();w.frame.result.warnings=['Expand a collapsed section.'];
+  const result=await w.send({type:'capture',tabId:1});
+  assert.equal(result.title,'Form');assert.equal(result.fields,1);assert.equal(result.pageId,w.read().pages[0].id);
+  assert.deepEqual(structuredClone(result.warnings),['Expand a collapsed section.']);
+  const duplicate=await w.send({type:'capture',tabId:1});assert.equal(duplicate.pageId,result.pageId);
+});
+test('distinct SPA form paths do not suppress identical answers',async()=>{
+  const w=worker();w.frame.result.sourcePath='/form-one';await w.send({type:'capture',tabId:1});
+  w.frame.result.sourcePath='/form-two';assert.equal((await w.send({type:'capture',tabId:1})).count,2);
+});
+test('recapturing after resolving capture notes keeps the updated snapshot',async()=>{
+  const w=worker();w.frame.result.warnings=['Expand a collapsed section.'];await w.send({type:'capture',tabId:1});
+  w.frame.result.warnings=[];assert.equal((await w.send({type:'capture',tabId:1})).count,2);
+  assert.deepEqual(w.read().pages[1].warnings,[]);assert.equal(w.read().pages[0].warnings.length,1);
+});
+test('section selection is atomic and rejects invalid indices',async()=>{
+  const w=worker();w.frame.result.items.push({section:'',kind:'field',label:'City',value:'Toronto'});
+  await w.send({type:'capture',tabId:1});const pageId=w.read().pages[0].id;
+  assert.equal((await w.send({type:'includeMany',pageId,items:[0,9],included:false})).ok,false);
+  assert.deepEqual(w.read().pages[0].excluded,[]);
+  await w.send({type:'includeMany',pageId,items:[0,1],included:false});assert.deepEqual(w.read().pages[0].excluded,[0,1]);
+  await w.send({type:'includeMany',pageId,items:[0,1],included:true});assert.deepEqual(w.read().pages[0].excluded,[]);
+});
+test('version selection preserves all snapshots and field selections',async()=>{
+  const w=worker();await w.send({type:'capture',tabId:1});const first=w.read().pages[0].id;
+  await w.send({type:'include',pageId:first,item:0,included:false});
+  w.frame.result.items[0].value='Bob';await w.send({type:'capture',tabId:1});const second=w.read().pages[1].id;
+  w.frame.result.title='Different form';await w.send({type:'capture',tabId:1});
+  await w.send({type:'useVersion',pageId:second});
+  const pages=w.read().pages;assert.equal(pages.length,3);assert.equal(pages[0].enabled,false);assert.equal(pages[1].enabled,true);
+  assert.notEqual(pages[2].enabled,false);assert.deepEqual(pages[0].excluded,[0]);
+  await w.send({type:'enable',pageId:first,enabled:true});assert.deepEqual(w.read().pages[0].excluded,[0]);
+});
+test('paper and table layout persist with validation',async()=>{
+  const w=worker();w.frame.result.items=[{section:'',kind:'table',label:'History',rows:[[{text:'City',header:true,colSpan:1,rowSpan:1}],[{text:'Toronto',header:false,colSpan:1,rowSpan:1}]]}];
+  await w.send({type:'capture',tabId:1});const pageId=w.read().pages[0].id;
+  await w.send({type:'paper',paper:'a4'});assert.equal(w.read().settings.paper,'a4');
+  assert.equal((await w.send({type:'paper',paper:'bogus'})).ok,false);assert.equal(w.read().settings.paper,'a4');
+  await w.send({type:'layout',pageId,item:0,layout:'cards'});assert.equal(w.read().pages[0].layouts[0],'cards');
+  assert.equal((await w.send({type:'layout',pageId,item:0,layout:'bogus'})).ok,false);
+});
+test('invalid restore leaves current data intact and valid restore replaces it',async()=>{
+  const w=worker();await w.send({type:'capture',tabId:1});const before=w.read();
+  assert.equal((await w.send({type:'restore',draft:{format:'wrong'}})).ok,false);assert.deepEqual(w.read(),before);
+  const draft={format:'MapleRecord',version:1,record:{...before,title:'Restored title',settings:{paper:'a4'}}};
+  await w.send({type:'restore',draft});assert.equal(w.read().title,'Restored title');assert.equal(w.read().pages.length,1);
+});

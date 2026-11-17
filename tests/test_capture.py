@@ -142,5 +142,24 @@ class CaptureTests(unittest.TestCase):
         result = self.capture('<table><tr><th>Notes</th></tr><tr><td contenteditable>Some notes</td></tr></table>')
         self.assertEqual(result['items'][0]['rows'][1][0]['text'], 'Some notes')
 
+    def test_visible_frames_report_incomplete_capture(self):
+        result = self.capture('<label>Name<input value="Alice"></label><iframe title="Embedded form" srcdoc="<input value=Bob>"></iframe><iframe hidden></iframe>')
+        self.assertEqual(len(result['items']), 1)
+        self.assertIn('1 embedded frame was not captured', result['warnings'][0])
+
+    def test_collapsed_details_report_expand_instruction(self):
+        result = self.capture('<label>Name<input value="Alice"></label><details><summary>History</summary><label>City<input value="Toronto"></label></details>')
+        self.assertIn('collapsed section', ' '.join(result['warnings']))
+        self.assertIn('Expand', ' '.join(result['warnings']))
+
+    def test_collapsed_aria_form_panel_reports_warning(self):
+        result = self.capture('<label>Name<input value="Alice"></label><button aria-expanded="false" aria-controls="history">History</button><div id="history" hidden><input value="Toronto"></div>')
+        self.assertEqual(len(result['warnings']), 1)
+        self.assertIn('collapsed section', result['warnings'][0])
+
+    def test_empty_frame_page_returns_actionable_error(self):
+        result = self.capture('<iframe title="Embedded form"></iframe>')
+        self.assertIn('open it in its own tab', result['error'])
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

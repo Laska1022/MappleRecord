@@ -184,6 +184,18 @@ function captureForm(portalValues) {
       if (name) add({ kind: "field", label: name, value: readable(node) });
     }
   }
-  if (!items.length) return { error: "No form data found. Open an application form or review page and expand the sections you need." };
-  return { title, source: location.hostname, items };
+  const warnings = [];
+  const frames = [...root.querySelectorAll("iframe,frame")].filter(visible).length;
+  if (frames) warnings.push(frames + " embedded frame" + (frames === 1 ? " was" : "s were") + " not captured. If a form is inside a frame, open it in its own tab and capture it there.");
+  const collapsed = new Set([...root.querySelectorAll("details:not([open])")].filter(visible));
+  for (const trigger of root.querySelectorAll('[aria-expanded="false"][aria-controls]')) {
+    if (!visible(trigger)) continue;
+    for (const id of trigger.getAttribute("aria-controls").split(/\s+/)) {
+      const panel = document.getElementById(id);
+      if (panel && panel.querySelector(control + "," + summary + ",dt,table")) collapsed.add(panel);
+    }
+  }
+  if (collapsed.size) warnings.push(collapsed.size + " collapsed section" + (collapsed.size === 1 ? " may contain" : "s may contain") + " more answers. Expand the sections you need, then capture this page again.");
+  if (!items.length) return { error: "No form data found. Open an application form or review page and expand the sections you need." + (warnings.length ? " " + warnings.join(" ") : "") };
+  return { title, source: location.hostname, sourcePath: location.pathname, items, warnings };
 }

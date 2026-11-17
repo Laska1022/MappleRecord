@@ -1,0 +1,29 @@
+@page {
+  margin: 16mm 15mm 18mm;
+  @bottom-left { content: "Maple Record · Personal copy"; font: 8pt Arial, sans-serif; color: #586a60; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial, sans-serif; color: #586a60; }
+}
+.pdf-document { color: #25352e; font: 10pt/1.5 Arial, sans-serif; }
+.pdf-document * { box-sizing: border-box; }
+.pdf-document h1,.pdf-document h2,.pdf-document h3,.pdf-document h5,.pdf-document p,.pdf-document dl,.pdf-document dd { margin: 0; }
+.pdf-document h1 { font: 24pt/1.15 Georgia,serif; margin-bottom: 4mm; overflow-wrap: anywhere; }
+.pdf-document .pdf-capture + .pdf-capture { break-before: page; }
+.pdf-document .pdf-header { border-bottom: 1pt solid #245548; padding-bottom: 4mm; margin-bottom: 5mm; break-inside: avoid; break-after: avoid; }
+.pdf-document h2 { font: 17pt/1.2 Georgia,serif; margin-bottom: 2mm; overflow-wrap: anywhere; }
+.pdf-document .pdf-meta { font-size: 8pt; color: #586a60; overflow-wrap: anywhere; }
+.pdf-document h3 { font-size: 10pt; color: #245548; background: #edf2e8; padding: 2mm; margin: 4mm 0 2mm; break-after: avoid; }
+.pdf-document .pdf-field { border-bottom: .5pt solid #d8dfd5; padding: 2mm 0; }
+.pdf-document .pdf-label { font-weight: bold; margin-bottom: 1mm; overflow-wrap: anywhere; break-after: avoid; }
+.pdf-document .pdf-value { white-space: pre-wrap; overflow-wrap: anywhere; orphans: 3; widows: 3; }
+.pdf-document .table-wrap { width: 100%; }
+.pdf-document table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5pt; }
+.pdf-document th,.pdf-document td { padding: 1.6mm; border: .5pt solid #cdd6c9; text-align: start; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdf-document th { background: #edf2e8; }
+.pdf-document thead { display: table-header-group; }
+.pdf-document tr { break-inside: avoid; }
+.pdf-document .table-record { margin: 2mm 0 4mm; }
+.pdf-document .table-record h5 { background: #edf2e8; padding: 1.5mm; font-size: 9pt; break-after: avoid; }
+.pdf-document .wide-table dt { font-weight: bold; padding-top: 1.5mm; break-after: avoid; overflow-wrap: anywhere; }
+.pdf-document .wide-table dd { white-space: pre-wrap; overflow-wrap: anywhere; border-bottom: .5pt solid #d8dfd5; padding-bottom: 1.5mm; }
+.pdf-document .capture-notes { background: #fff8e9; border-left: 2pt solid #c9a45d; padding: 3mm; margin: 3mm 0; font-size: 8pt; }
+.pdf-document .notice-list { margin: 1mm 0 0; padding-left: 4mm; }

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF preview · Maple Record</title>
+  <link rel="stylesheet" href="preview.css" data-pagedjs-ignore>
+  <script defer src="shared.js"></script><script defer src="document-view.js"></script>
+  <script defer src="vendor/pagedjs/paged.min.js"></script><script defer src="preview.js"></script>
+</head>
+<body>
+  <header id="preview-tools"><div><a href="review.html" class="back-link">← Back to review</a><h1>PDF preview</h1><p id="preview-status" role="status">Preparing your selected answers…</p></div><div class="preview-actions"><label for="paper">Paper size<select id="paper"><option value="letter">Letter</option><option value="a4">A4</option></select></label><button id="refresh-preview">Refresh preview</button><button id="save-pdf" disabled>Save as PDF</button></div><p class="print-tip">In the print dialog, choose Save as PDF, use the selected paper size, and turn off browser headers and footers. Only included captures and fields appear here.</p></header>
+  <p id="preview-error" role="alert" hidden></p><p id="print-guard">Prepare or refresh the PDF preview before printing.</p><div id="print-document" aria-label="Paginated PDF preview"></div>
+</body>
+</html>

@@ -18,10 +18,16 @@
     <p class="intro">Add the visible answers on this page to your PDF record.</p>
     <div class="source-card">
       <span class="page-icon" aria-hidden="true"></span>
-      <div><p class="caption">Current tab</p><strong id="site">Reading tab…</strong></div>
+      <div><p class="caption">Current tab</p><strong id="tab-title">Reading tab…</strong><p id="site" class="site"></p></div>
     </div>
+    <p class="capture-tip">Expand the sections you want to keep before capturing.</p>
     <button id="capture" class="primary full" disabled><span aria-hidden="true">＋</span> Capture this page</button>
     <p class="feedback" id="feedback" role="status"></p>
+    <section id="capture-result" class="capture-result" hidden aria-label="Capture summary">
+      <p class="caption">Saved to this session</p><h2 id="captured-title"></h2>
+      <p id="captured-count"></p><ul id="capture-notes" class="notice-list"></ul>
+      <button class="secondary full" id="review-capture">Review this capture →</button>
+    </section>
     <div class="record-link">
       <div><p class="caption">Your record</p><strong id="count">Loading…</strong></div>
       <button id="review" class="secondary">Review <span aria-hidden="true">→</span></button>
