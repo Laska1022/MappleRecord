@@ -3,10 +3,12 @@
 // Chrome serializes this function into the active tab's isolated world.
 function captureForm(portalValues) {
   const root = document.querySelector("#webForm") || document.querySelector("main, [role=main]") || document.body;
+  // A closed disclosure renders only its first direct summary.
+  const closedDetailsBody = "details:not([open]) > :not(summary:first-of-type)";
   const ignore = [
     "nav", "footer", "[role=navigation]", "[role=search]", "[role=alert]", "[hidden]", "[inert]",
     '[aria-hidden="true"]', ".wb-inv", ".sr-only", ".visually-hidden",
-    ".modal", ".modal-dialog", ".help-block", "#validationErrors", "script", "style", "template"
+    ".modal", ".modal-dialog", ".help-block", "#validationErrors", "script", "style", "template", closedDetailsBody
   ].join(",");
   const control = 'input, select, textarea, [contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [role=combobox]';
   const skipTypes = new Set(["hidden", "password", "file", "submit", "reset", "button", "image", "search"]);
@@ -30,11 +32,16 @@ function captureForm(portalValues) {
         // Preserve rendered line boundaries without splitting adjacent inline text.
         const block = /^(block|flow-root|list-item|flex|grid|table(?:-.+)?)$/.test(getComputedStyle(part).display);
         if (block || part.tagName === "BR") tokens.push(" ");
-        for (const child of part.childNodes) visit(child);
+        if (part.matches("details:not([open])")) {
+          const summary = part.querySelector(":scope > summary");
+          if (summary) visit(summary);
+        } else {
+          for (const child of part.childNodes) visit(child);
+        }
         if (block) tokens.push(" ");
       }
     }
-    if (node) visit(node);
+    if (node && !node.closest(closedDetailsBody)) visit(node);
     return normalize(tokens.join(""));
   }
 
@@ -110,7 +117,7 @@ function captureForm(portalValues) {
     const pieces = [readable(cell), ...controls.map(answer)].filter(Boolean);
     if (pieces.length) return pieces.join(" ");
     // Older e-APR grids keep the lookup identifier inside an otherwise empty visible cell.
-    const coded = cell.querySelector("input[data-lovid]");
+    const coded = [...cell.querySelectorAll("input[data-lovid]")].find(input => !input.closest(closedDetailsBody));
     const code = coded?.dataset.lovid;
     return code && code !== "-1" && !credential(coded) ? (Object.hasOwn(portalValues, code) ? portalValues[code] : code) : "";
   }

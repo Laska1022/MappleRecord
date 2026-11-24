@@ -15,6 +15,7 @@ FIXTURE = """
   <div class="form-group"><label>Address</label><div class="form-control-static"><div>123 Main Street</div><div>Toronto</div><div>Ontario</div></div></div>
   <table><tr><th>Country</th></tr><tr><td><div role="combobox"><input value="Canada"></div></td></tr></table>
   <div aria-label="Notes" contenteditable>Some notes</div>
+  <details><summary>Previous address</summary><label>Street<input value="COLLAPSED_SENTINEL"></label></details>
 </main>
 """
 
@@ -89,6 +90,7 @@ def main():
                 for value in ['Renamed record', 'Toronto', 'Canada', '123 Main Street Toronto Ontario', 'Some notes', 'Smith', 'Page 1 of 2', 'Page 2 of 2']:
                     assert value in text, (value, text)
                 assert 'EXCLUDED_SENTINEL' not in text and 'SECRET_SENTINEL' not in text
+                assert 'COLLAPSED_SENTINEL' not in text
                 info = subprocess.run(['pdfinfo', '-'], input=pdf, capture_output=True, check=True).stdout.decode()
                 size = re.search(r'Page size:\s+([\d.]+) x ([\d.]+)', info)
                 assert size and all(abs(float(actual) - expected) < 1 for actual, expected in zip(size.groups(), dimensions)), info

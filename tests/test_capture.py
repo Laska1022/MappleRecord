@@ -149,8 +149,26 @@ class CaptureTests(unittest.TestCase):
 
     def test_collapsed_details_report_expand_instruction(self):
         result = self.capture('<label>Name<input value="Alice"></label><details><summary>History</summary><label>City<input value="Toronto"></label></details>')
+        self.assertEqual([item['value'] for item in result['items']], ['Alice'])
         self.assertIn('collapsed section', ' '.join(result['warnings']))
         self.assertIn('Expand', ' '.join(result['warnings']))
+
+    def test_details_only_expose_the_first_summary_until_opened(self):
+        html = """<details><summary><input aria-label="Summary" value="Current"></summary>
+            <summary><input aria-label="Second summary" value="Second"></summary>
+            <details open><summary>History</summary><input aria-label="City" value="Toronto"></details>
+            </details>"""
+        closed = self.capture(html)
+        self.assertEqual([item['value'] for item in closed['items']], ['Current'])
+        self.page.locator('details').first.evaluate('(details) => details.open = true')
+        opened = self.page.evaluate('(values) => captureForm(values)', self.values)
+        self.assertEqual([item['value'] for item in opened['items']], ['Current', 'Second', 'Toronto'])
+
+    def test_closed_details_in_table_omit_direct_text_and_lookup_codes(self):
+        html = """<table><tr><td><details><summary>History</summary>Old address</details></td>
+            <td><details><summary></summary><input type="hidden" data-lovid="8536"></details></td></tr></table>"""
+        result = self.capture(html)
+        self.assertEqual([cell['text'] for cell in result['items'][0]['rows'][0]], ['History', ''])
 
     def test_collapsed_aria_form_panel_reports_warning(self):
         result = self.capture('<label>Name<input value="Alice"></label><button aria-expanded="false" aria-controls="history">History</button><div id="history" hidden><input value="Toronto"></div>')
