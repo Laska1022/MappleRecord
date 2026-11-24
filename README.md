@@ -9,13 +9,13 @@ Download and extract this repository, or clone it. Open the extensions page in C
 ## Capture, review, and export
 
 1. Sign in to the portal, open a form or review page, and expand the sections you want to save.
-2. Open Maple Record. Check the tab title and website, then choose **Capture this page**. The summary shows the captured form title, field count, and any detected capture limitations. **Review this capture** opens that snapshot directly.
-3. In review, search questions and answers or filter by included, excluded, and unanswered fields. Use field or section checkboxes to choose PDF contents. Search filters and collapsed cards do not exclude answers from export.
+2. Open Maple Record. Choose the application record for this capture, or choose **New record** and give it a name. Check the tab title and website, then choose **Capture this page**. The summary shows the captured form title, field count, and any detected capture limitations. **Review this capture** opens that snapshot directly.
+3. Choose **Show on form** beside an answer to highlight its field in the original tab. The link works while the original document and field are available. In review, search questions and answers or filter by included, excluded, and unanswered fields. Use field or section checkboxes to choose PDF contents. Search filters and collapsed cards do not exclude answers from export.
 4. Repeated captures of the same form are grouped in the sidebar. **Compare previous** highlights added/changed answers and lists removed answers. **Use only this version** excludes the other versions from the PDF without deleting them or their field selections. You can re-enable them later. Forms are grouped by website, page path (without query parameters), and title; check that grouped snapshots refer to the same form/application.
 5. For tables, choose **Automatic**, **Table**, or **Entry cards**. Automatic uses cards for simple tables with more than five columns. Tables with merged cells or complex headers retain their table structure.
-6. Choose **Preview PDF**, select **Letter** or **A4**, and check the numbered pages. Choose **Save as PDF** to open the browser print dialog. Select the same paper size, choose Save as PDF as the destination, and turn off browser headers and footers. If the record changes in another tab, refresh the preview before saving.
+6. Choose **Preview PDF**, select **Letter** or **A4**, and check the numbered pages. The **Before saving your PDF** checklist links to captures with warnings, multiple included versions, or excluded fields. Choose **Save as PDF** to open the browser print dialog. Select the same paper size, choose Save as PDF as the destination, and turn off browser headers and footers. If the record changes in another tab, refresh the preview before saving.
 
-Captures stay in extension session storage and clear when the browser restarts or the extension reloads. **Clear record** discards the current collection after confirmation.
+Captures stay in extension session storage and clear when the browser restarts or the extension reloads. Review tabs, PDF previews, and draft downloads each belong to one record. **Clear record** clears only the selected record after confirmation.
 
 ## Continue later with a draft
 
@@ -45,6 +45,7 @@ python tests/test_capture.py
 node --test tests/test_background.cjs tests/test_shared.cjs
 python tests/test_review_workflow.py
 python tests/test_pdf_pagination.py
+python tests/test_record_workflow.py
 ```
 
 The browser tests use `CHROMIUM_EXECUTABLE` if set, an installed `chromium` if available, or Playwright's bundled Chromium. On Windows, activate the virtual environment with `.venv\Scripts\activate` instead.

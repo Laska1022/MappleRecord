@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Maple Record</title>
   <link rel="stylesheet" href="styles.css">
-  <script defer src="shared.js"></script>
+  <script defer src="shared.js"></script><script defer src="record-picker.js"></script>
   <script defer src="popup.js"></script>
 </head>
 <body class="popup">
@@ -16,7 +16,13 @@
   <main class="popup-main">
     <h1>Capture a form</h1>
     <p class="intro">Add the visible answers on this page to your PDF record.</p>
-    <div class="source-card">
+    <div id="record-picker" class="record-picker screen">
+      <label>Application record<select aria-label="Application record"></select></label>
+      <button type="button" class="text-button new-record">New record</button>
+      <form hidden><label>Record name<input name="recordName" required maxlength="160" autocomplete="off"></label>
+        <button type="submit" class="secondary">Create record</button><button type="button" class="text-button">Cancel</button></form>
+    </div>
+      <div class="source-card">
       <span class="page-icon" aria-hidden="true"></span>
       <div><p class="caption">Current tab</p><strong id="tab-title">Reading tab…</strong><p id="site" class="site"></p></div>
     </div>
@@ -30,7 +36,7 @@
     </section>
     <div class="record-link">
       <div><p class="caption">Your record</p><strong id="count">Loading…</strong></div>
-      <button id="review" class="secondary">Review <span aria-hidden="true">→</span></button>
+      <button id="review" disabled class="secondary">Review <span aria-hidden="true">→</span></button>
     </div>
   </main>
   <footer class="popup-footer"><span class="status-dot" aria-hidden="true"></span> Captures stay in this browser session.</footer>

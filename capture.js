@@ -1,7 +1,7 @@
 "use strict";
 
 // Chrome serializes this function into the active tab's isolated world.
-function captureForm(portalValues) {
+function captureForm(portalValues, captureId) {
   const root = document.querySelector("#webForm") || document.querySelector("main, [role=main]") || document.body;
   // A closed disclosure renders only its first direct summary.
   const closedDetailsBody = "details:not([open]) > :not(summary:first-of-type)";
@@ -16,18 +16,43 @@ function captureForm(portalValues) {
   const normalize = value => (value || "").replace(/\s+/g, " ").trim();
 
   function visible(node) {
-    return !node.closest(ignore) && node.getClientRects().length > 0 &&
-      getComputedStyle(node).visibility === "visible";
+    if (node.closest(ignore)) return false;
+    const style = getComputedStyle(node);
+    if (style.visibility !== "visible") return false;
+    if (style.display !== "contents") return node.getClientRects().length > 0;
+    // A contents wrapper has no box. Its children and direct text can still render.
+    return [...node.childNodes].some(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) return visible(child);
+      if (child.nodeType !== Node.TEXT_NODE) return false;
+      const range = document.createRange();
+      range.selectNodeContents(child);
+      return range.getClientRects().length > 0;
+    });
   }
 
-  function readable(node, allowRootControl = false) {
+  function readable(node, { allowRootControl = false, includeControlValues = false } = {}) {
     const tokens = [];
+    const pieces = [];
+    function flushText() {
+      const text = normalize(tokens.join(""));
+      if (text) pieces.push(text);
+      tokens.length = 0;
+    }
     function visit(part) {
       if (part.nodeType === Node.TEXT_NODE) {
         tokens.push(part.textContent);
       } else if (part.nodeType === Node.ELEMENT_NODE) {
-        if (part.matches(ignore + ",button,[role=button]") ||
-            (part.matches(control) && !(allowRootControl && part === node))) return;
+        if (part.matches(control) && !(allowRootControl && part === node)) {
+          if (includeControlValues && safeControl(part)) {
+            const value = answer(part);
+            if (value) {
+              flushText();
+              pieces.push(value);
+            }
+          }
+          return;
+        }
+        if (part.matches(ignore + ",button,[role=button]")) return;
         if (part !== node && !visible(part)) return;
         // Preserve rendered line boundaries without splitting adjacent inline text.
         const block = /^(block|flow-root|list-item|flex|grid|table(?:-.+)?)$/.test(getComputedStyle(part).display);
@@ -42,7 +67,8 @@ function captureForm(portalValues) {
       }
     }
     if (node && !node.closest(closedDetailsBody)) visit(node);
-    return normalize(tokens.join(""));
+    flushText();
+    return pieces.join(" ");
   }
 
   function credential(node) {
@@ -90,16 +116,28 @@ function captureForm(portalValues) {
     return node && [...node.querySelectorAll(control)].some(safeControl);
   }
 
+  function hasVisibleDescendant(node, selector) {
+    return [...node.querySelectorAll(selector)].some(visible);
+  }
+
   function answer(node) {
     if (node.matches('[role="combobox"]') && !node.matches("input,select")) {
       const input = [...node.querySelectorAll("input,select")].find(safeControl);
       if (input) return answer(input);
       const selected = [...node.querySelectorAll('[aria-selected="true"]')].find(visible);
-      return normalize(node.getAttribute("aria-valuetext")) || readable(selected) || readable(node, true);
+      return normalize(node.getAttribute("aria-valuetext")) || readable(selected) || readable(node, { allowRootControl: true });
     }
     if (node.tagName === "SELECT") {
-      return [...node.selectedOptions].filter(option => option.value !== "" && option.value !== "-1")
-        .map(option => normalize(option.text)).join(", ");
+      const choices = [];
+      for (const option of node.selectedOptions) {
+        const label = normalize(option.label);
+        if (!label || option.value === "") continue;
+        // Some portal forms use -1 for their prompt, others for an actual answer.
+        const prompt = /^[\s–—.-]*(?:(?:please )?(?:select|choose)(?: one| an option)?|(?:veuillez )?(?:sélectionner|sélectionnez|choisir|choisissez)(?: une option)?)[\s…–—.-]*$/i;
+        if (option.value === "-1" && prompt.test(label)) continue;
+        choices.push(label);
+      }
+      return choices.join(", ");
     }
     if (node.type === "checkbox" || node.type === "radio") return node.checked ? "Checked" : "Unchecked";
     const code = node.getAttribute("data-lovid");
@@ -112,10 +150,8 @@ function captureForm(portalValues) {
 
   function cellText(cell) {
     if (cell.matches(control) && safeControl(cell)) return answer(cell);
-    const controls = [...cell.querySelectorAll(control)]
-      .filter(node => safeControl(node) && !node.parentElement?.closest(control));
-    const pieces = [readable(cell), ...controls.map(answer)].filter(Boolean);
-    if (pieces.length) return pieces.join(" ");
+    const text = readable(cell, { includeControlValues: true });
+    if (text) return text;
     // Older e-APR grids keep the lookup identifier inside an otherwise empty visible cell.
     const coded = [...cell.querySelectorAll("input[data-lovid]")].find(input => !input.closest(closedDetailsBody));
     const code = coded?.dataset.lovid;
@@ -140,8 +176,20 @@ function captureForm(portalValues) {
   const heading = [...root.querySelectorAll("h1")].find(visible);
   const title = readable(heading) || normalize(document.title) || "Portal form";
 
-  function add(item) {
-    if (item) items.push({ section, ...item });
+  const sourceRefs = [];
+  function add(item, element) {
+    if (!item) return;
+    if (captureId) {
+      // This map lives in Chrome's isolated world and releases detached elements.
+      const sources = globalThis.mapleRecordSources ??= new WeakMap();
+      let ref = sources.get(element);
+      if (!ref || ref.url !== location.href || ref.label !== item.label || ref.section !== section) {
+        ref = { id: captureId + ":" + items.length, url: location.href, label: item.label, section };
+        sources.set(element, ref);
+      }
+      sourceRefs.push(ref.id);
+    }
+    items.push({ section, ...item });
   }
 
   const radios = [...root.querySelectorAll('input[type=radio]')].filter(safeControl);
@@ -151,7 +199,7 @@ function captureForm(portalValues) {
       section = readable(node);
       if (section === title) section = "";
     } else if (node.matches("table")) {
-      add(readTable(node));
+      add(readTable(node), node);
     } else if (node.matches(control)) {
       if (!safeControl(node) || node.parentElement?.closest(control)) continue;
       if (node.type === "radio") {
@@ -159,36 +207,38 @@ function captureForm(portalValues) {
         siblings.forEach(other => handled.add(other));
         const selected = siblings.find(other => other.checked);
         add({ kind: "field", label: groupLabel(node) || node.name || controlLabel(node),
-          value: selected ? label(selected) || selected.value : "" });
+          value: selected ? label(selected) || selected.value : "" }, selected || node);
       } else {
         const field = controlLabel(node);
         const group = node.type === "checkbox" ? groupLabel(node) : "";
-        add({ kind: "field", label: group && group !== field ? group + " · " + field : field, value: answer(node) });
+        add({ kind: "field", label: group && group !== field ? group + " · " + field : field, value: answer(node) }, node);
       }
     } else if (node.tagName === "DT") {
       const values = [];
+      let firstAnswer;
       let sibling = node.nextElementSibling;
       while (sibling?.tagName === "DD") {
         if (visible(sibling) && !hasVisibleControl(sibling)) {
+          firstAnswer ??= sibling;
           values.push(readable(sibling));
           handled.add(sibling);
           sibling.querySelectorAll(summary).forEach(child => handled.add(child));
         }
         sibling = sibling.nextElementSibling;
       }
-      if (values.length) add({ kind: "field", label: readable(node), value: values.join("\n") });
+      if (values.length) add({ kind: "field", label: readable(node), value: values.join("\n") }, firstAnswer);
     } else if (node.matches(".question-label")) {
       const sibling = node.nextElementSibling;
       const group = node.closest(".eapp-question-and-answer, .form-group");
       const structured = [summary, "table,dl,button,label,.eapp-question-and-answer,.question-label,.question-description,.help-block"].join(",");
       if (!hasVisibleControl(group) && sibling && visible(sibling) && !hasVisibleControl(sibling) &&
-          !sibling.matches(control + "," + structured) && !sibling.querySelector(structured)) {
+          !sibling.matches(control + "," + structured) && !hasVisibleDescendant(sibling, structured)) {
         const value = readable(sibling);
-        if (value) add({ kind: "field", label: readable(node), value });
+        if (value) add({ kind: "field", label: readable(node), value }, sibling);
       }
-    } else if (!hasVisibleControl(node) && !node.querySelector(summary)) {
+    } else if (!hasVisibleControl(node) && !hasVisibleDescendant(node, summary)) {
       const name = label(node) || portalLabel(node) || readable(node.previousElementSibling);
-      if (name) add({ kind: "field", label: name, value: readable(node) });
+      if (name) add({ kind: "field", label: name, value: readable(node) }, node);
     }
   }
   const warnings = [];
@@ -204,5 +254,28 @@ function captureForm(portalValues) {
   }
   if (collapsed.size) warnings.push(collapsed.size + " collapsed section" + (collapsed.size === 1 ? " may contain" : "s may contain") + " more answers. Expand the sections you need, then capture this page again.");
   if (!items.length) return { error: "No form data found. Open an application form or review page and expand the sections you need." + (warnings.length ? " " + warnings.join(" ") : "") };
-  return { title, source: location.hostname, sourcePath: location.pathname, items, warnings };
+  return { title, source: location.hostname, sourcePath: location.pathname, items, warnings, ...(captureId ? { sourceRefs } : {}) };
+}
+
+// Chrome injects this function into the same isolated world as captureForm.
+function highlightSource(refId) {
+  const sources = globalThis.mapleRecordSources;
+  if (!sources) return false;
+  for (const element of document.querySelectorAll("*")) {
+    const ref = sources.get(element);
+    if (ref?.id !== refId || ref.url !== location.href) continue;
+    if (element.closest('[hidden],[inert],[aria-hidden="true"],details:not([open]) > :not(summary:first-of-type)') ||
+        getComputedStyle(element).visibility !== "visible") return false;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const rect = element.getBoundingClientRect().width ? element.getBoundingClientRect() : range.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    const target = element.getClientRects().length ? element : element.parentElement;
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    target.animate([{ outline: "4px solid #c86518", outlineOffset: "3px" },
+      { outline: "4px solid #c86518", outlineOffset: "3px", offset: 0.85 },
+      { outline: "4px solid transparent", outlineOffset: "3px" }], 3500);
+    return true;
+  }
+  return false;
 }

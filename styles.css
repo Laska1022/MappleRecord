@@ -141,3 +141,11 @@ dialog input { width: 100%; border: 1px solid #aebfb2; border-radius: 5px; paddi
 @media (max-width: 820px) { .workspace { display: block; } .sidebar { min-height: 0; padding: 18px 22px; border-right: 0; border-bottom: 1px solid var(--line); } .sidebar-head { justify-content: flex-start; gap: 10px; margin-bottom: 10px; } #outline { display: flex; gap: 24px; overflow-x: auto; } .outline-group { min-width: 180px; max-width: 250px; margin-bottom: 6px; } .sidebar-hint { display: none; } .sidebar > button { margin-top: 4px; } .workspace main { padding-top: 22px; } .brandbar { padding: 16px 22px; } .steps { gap: 12px; } }
 @media (max-width: 560px) { .steps { display: none; } .record-head { flex-direction: column; align-items: flex-start; } .search-row { flex-wrap: wrap; } .search-label { flex-basis: 100%; } .search-row > button { margin-left: auto; } .page-card { padding: 16px; } .field { grid-template-columns: 16px minmax(0,1fr); gap: 7px 10px; } .answer { grid-column: 2; } .section-head { align-items: flex-start; flex-direction: column; } .draft-actions { flex-wrap: wrap; } }
 @media print { .review .brandbar,.review .workspace,.review dialog { display: none !important; } .review::after { display: block; margin: 20mm; content: "Choose Preview PDF in Maple Record to print your selected answers with page numbers."; } }
+
+.record-picker { margin-bottom: 18px; }
+.record-picker label { display: block; font-weight: 600; font-size: 13px; }
+.record-picker select,.record-picker input { display: block; width: 100%; margin: 4px 0; }
+.record-picker input { border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.record-picker form { margin-top: 8px; }
+.record-picker form button { margin: 4px 8px 0 0; }
+.field-label .source-link { display: block; font-size: 12px; margin-top: 4px; text-align: left; }

@@ -4,7 +4,7 @@ importScripts("shared.js", "capture.js");
 let queue = Promise.resolve();
 let portalValues;
 
-async function capture(tabId) {
+async function capture(tabId, recordId) {
   if (!portalValues) {
     const response = await fetch(chrome.runtime.getURL("portal-values.json"));
     if (!response.ok) throw new Error("The portal answer labels could not be loaded.");
@@ -15,45 +15,70 @@ async function capture(tabId) {
     [frame] = await chrome.scripting.executeScript({
       target: { tabId },
       func: captureForm,
-      args: [portalValues]
+      args: [portalValues, crypto.randomUUID()]
     });
   } catch {
     throw new Error("Open the portal form, then click the extension icon and try again.");
   }
   if (!frame?.result) throw new Error("The page could not be read. Open the form and try again.");
   if (frame.result.error) throw new Error(frame.result.error);
-  const record = await readRecord();
+  const record = await readRecord(recordId);
   const snapshot = frame.result;
   const duplicate = record.pages.find(page =>
     page.documentId === frame.documentId && formIdentity(page) === formIdentity(snapshot) &&
     JSON.stringify(page.items) === JSON.stringify(snapshot.items) &&
     JSON.stringify(page.warnings || []) === JSON.stringify(snapshot.warnings || [])
   );
-  if (duplicate) return { duplicate: true, count: record.pages.length, pageId: duplicate.id, title: duplicate.title, fields: duplicate.items.length, warnings: snapshot.warnings || [] };
+  if (duplicate) {
+    if (JSON.stringify(duplicate.sourceRefs) !== JSON.stringify(snapshot.sourceRefs)) {
+      Object.assign(duplicate, { sourceRefs: snapshot.sourceRefs, tabId });
+      await chrome.storage.session.set({ [recordKey(recordId)]: record });
+    }
+    return { duplicate: true, count: record.pages.length, pageId: duplicate.id, title: duplicate.title, fields: duplicate.items.length, warnings: snapshot.warnings || [] };
+  }
   const page = {
-    ...snapshot, id: crypto.randomUUID(), documentId: frame.documentId,
+    ...snapshot, id: crypto.randomUUID(), documentId: frame.documentId, tabId,
     capturedAt: new Date().toISOString(), excluded: []
   };
   record.pages.push(page);
-  await chrome.storage.session.set({ [RECORD_KEY]: record });
+  await chrome.storage.session.set({ [recordKey(recordId)]: record });
   return { count: record.pages.length, pageId: page.id, title: page.title, fields: page.items.length, warnings: page.warnings || [] };
 }
 
 async function update(message) {
-  if (message.type === "capture") return capture(message.tabId);
-  if (message.type === "restore") {
-    const restored = validateDraft(message.draft);
-    await chrome.storage.session.set({ [RECORD_KEY]: restored });
-    return;
+  const catalog = await readCatalog();
+  if (message.type === "createRecord") {
+    const title = message.title.trim().slice(0, 160);
+    if (!title) throw new Error("Enter a name for the record.");
+    const id = crypto.randomUUID();
+    catalog.entries.push({ id, title });
+    catalog.activeId = id;
+    await chrome.storage.session.set({ [CATALOG_KEY]: catalog, [recordKey(id)]: emptyRecord(title) });
+    return { recordId: id };
   }
+  const id = message.recordId ?? DEFAULT_RECORD_ID;
+  const entry = catalog.entries.find(entry => entry.id === id);
+  if (!entry) throw new Error("This record is no longer available.");
+  const key = recordKey(id);
+  if (message.type === "selectRecord") {
+    catalog.activeId = id;
+    await chrome.storage.session.set({ [CATALOG_KEY]: catalog });
+    return { recordId: id };
+  }
+  if (message.type === "capture") return capture(message.tabId, id);
   if (message.type === "clear") {
-    await chrome.storage.session.remove(RECORD_KEY);
+    if (id === DEFAULT_RECORD_ID && entry.title === DEFAULT_TITLE) await chrome.storage.session.remove(key);
+    else await chrome.storage.session.set({ [key]: emptyRecord(entry.title) });
     return;
   }
-  const record = await readRecord();
-  if (message.type === "rename") {
-    record.title = message.title.trim().slice(0, 160) || DEFAULT_TITLE;
-  } else if (message.type === "paper") {
+  const record = message.type === "restore" ? validateDraft(message.draft) : await readRecord(id);
+  if (message.type === "rename" || message.type === "restore") {
+    if (message.type === "rename") record.title = message.title.trim().slice(0, 160) || DEFAULT_TITLE;
+    entry.title = record.title;
+    await chrome.storage.session.set({ [key]: record, [CATALOG_KEY]: catalog });
+    return;
+  }
+  if (message.type === "paper") {
     if (!["letter", "a4"].includes(message.paper)) throw new Error("Choose Letter or A4 paper.");
     record.settings = { ...settingsFor(record), paper: message.paper };
   } else {
@@ -61,6 +86,21 @@ async function update(message) {
     if (index < 0) throw new Error("This page has already been removed.");
     const page = record.pages[index];
     switch (message.type) {
+      case "showSource": {
+        const ref = page.sourceRefs?.[message.item];
+        try {
+          if (!ref || !page.documentId || !Number.isInteger(page.tabId)) throw new Error();
+          const [frame] = await chrome.scripting.executeScript({
+            target: { tabId: page.tabId, documentIds: [page.documentId] }, func: highlightSource, args: [ref]
+          });
+          if (frame?.result !== true) throw new Error();
+          const tab = await chrome.tabs.update(page.tabId, { active: true });
+          await chrome.windows.update(tab.windowId, { focused: true });
+          return;
+        } catch {
+          throw new Error("The original field is unavailable. Open the form and capture it again.");
+        }
+      }
       case "enable":
         page.enabled = Boolean(message.enabled);
         break;
@@ -101,7 +141,7 @@ async function update(message) {
         throw new Error("Unknown record action.");
     }
   }
-  await chrome.storage.session.set({ [RECORD_KEY]: record });
+  await chrome.storage.session.set({ [key]: record });
 }
 
 // A single writer keeps captures and edits from overwriting each other across tabs.

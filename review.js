@@ -4,6 +4,7 @@ const $ = selector => document.querySelector(selector);
 const dialog = $("#edit-dialog");
 const timestamp = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 let record = emptyRecord();
+let recordId;
 let pending = 0;
 let dialogAction;
 let initialRender = true;
@@ -37,8 +38,8 @@ async function change(message) {
   $("#feedback").textContent = "";
   $("#feedback").classList.remove("error");
   try {
-    await changeRecord(message);
-    render(await readRecord());
+    await changeRecord({ ...message, recordId });
+    render(await readRecord(recordId));
     return true;
   } catch (error) {
     showError(error.message);
@@ -55,7 +56,7 @@ function ask(action, page, draft) {
   const rename = action === "rename";
   $("#dialog-title").textContent = rename ? "Rename record" : action === "clear" ? "Clear this record?" : action === "restore" ? "Replace this record?" : "Remove this capture?";
   $("#dialog-detail").textContent = rename ? "This title will appear on the PDF." : action === "clear"
-    ? "All captured pages in this session will be removed. Download a draft first if you want to keep them."
+    ? "All captures in this record will be removed. Download a draft first if you want to keep them."
     : action === "restore" ? "Restore " + countText(draft.record.pages.length, "captured page") + " from this draft? This replaces the current session record."
     : "“" + page.title + "” will be removed. Other versions will stay in your record.";
   $("#title-label").hidden = $("#title-input").hidden = !rename;
@@ -76,13 +77,13 @@ dialog.addEventListener("close", () => {
 $("#clear").addEventListener("click", () => ask("clear"));
 $("#rename").addEventListener("click", () => ask("rename"));
 $("#print").addEventListener("click", async () => {
-  try { await chrome.tabs.create({ url: chrome.runtime.getURL("preview.html") }); }
+  try { await chrome.tabs.create({ url: recordUrl("preview.html", recordId) }); }
   catch (error) { showError(error.message); }
 });
 
 $("#save-draft").addEventListener("click", async () => {
   try {
-    const latest = await readRecord();
+    const latest = await readRecord(recordId);
     const blob = new Blob([JSON.stringify(draftFor(latest))], { type: "application/json" });
     if (blob.size > MAX_DRAFT_BYTES) throw new Error("This draft exceeds 8 MB. Save a PDF, or reduce the number of captures before downloading a draft.");
     const url = URL.createObjectURL(blob);
@@ -136,6 +137,20 @@ function itemView(page, item, index, difference) {
   input.addEventListener("change", () => change({ type: "include", pageId: page.id, item: index, included: input.checked }));
   const label = el("div", "field-label", item.label);
   if (difference) label.append(el("span", "change-badge", difference.type === "added" ? "New answer" : "Changed"));
+  if (page.sourceRefs?.[index]) {
+    const status = el("span", "source-status");
+    status.setAttribute("role", "status");
+    const source = actionButton("Show on form", "Show " + item.label + " on the original form", async () => {
+      status.textContent = "";
+      try {
+        await changeRecord({ type: "showSource", recordId, pageId: page.id, item: index });
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }, page.id + "-source-" + index);
+    source.className = "text-button source-link screen";
+    label.append(source, status);
+  }
   row.append(input, label);
   if (item.kind === "table") {
     const tools = el("label", "table-layout screen", "Layout ");
@@ -314,6 +329,15 @@ function render(next) {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "session" && changes[RECORD_KEY]) render(changes[RECORD_KEY].newValue || emptyRecord());
+  if (area === "session" && changes[recordKey(recordId)]) render(changes[recordKey(recordId)].newValue || emptyRecord());
 });
-readRecord().then(render).catch(error => showError(error.message));
+async function initializeReview() {
+  const catalog = await readCatalog();
+  recordId = initialRecordId(catalog);
+  setupRecordPicker(catalog, recordId);
+  const url = new URL(location.href);
+  url.searchParams.set("record", recordId);
+  history.replaceState(null, "", url);
+  render(await readRecord(recordId));
+}
+initializeReview().catch(error => showError(error.message));

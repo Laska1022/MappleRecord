@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Application record</title>
   <link rel="stylesheet" href="styles.css">
-  <script defer src="shared.js"></script><script defer src="document-view.js"></script><script defer src="review.js"></script>
+  <script defer src="shared.js"></script><script defer src="record-picker.js"></script><script defer src="document-view.js"></script><script defer src="review.js"></script>
 </head>
 <body class="review">
   <header class="brandbar screen">
@@ -13,6 +13,12 @@
   </header>
   <div class="workspace">
     <aside class="sidebar screen">
+      <div id="record-picker" class="record-picker screen">
+      <label>Application record<select aria-label="Application record"></select></label>
+      <button type="button" class="text-button new-record">New record</button>
+      <form hidden><label>Record name<input name="recordName" required maxlength="160" autocomplete="off"></label>
+        <button type="submit" class="secondary">Create record</button><button type="button" class="text-button">Cancel</button></form>
+    </div>
       <div class="sidebar-head"><h2>Your captures</h2><span class="count" id="page-count">0</span></div>
       <nav id="outline" aria-label="Captured forms and versions"></nav>
       <p class="sidebar-hint">Capture each form from the extension icon. Previous versions stay here until you remove them.</p>
@@ -25,7 +31,7 @@
       </div>
       <div class="session-banner screen">
         <div><strong><span class="status-dot" aria-hidden="true"></span> Saved for this browser session</strong><p>Keep a PDF or a draft before restarting Chrome or reloading the extension.</p></div>
-        <div class="draft-actions"><button class="secondary" id="save-draft" disabled>Download draft</button><button class="text-button" id="load-draft">Restore draft</button><input type="file" id="draft-file" accept=".json,application/json" hidden></div>
+        <div class="draft-actions"><button class="secondary" id="save-draft" disabled>Download draft</button><button class="text-button" id="load-draft" disabled>Restore draft</button><input type="file" id="draft-file" accept=".json,application/json" hidden></div>
       </div>
       <p class="draft-note screen">Draft files contain your captured answers. Keep them somewhere private; they are not uploaded to a server.</p>
       <div id="tools" class="review-tools screen" hidden>

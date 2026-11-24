@@ -1,15 +1,42 @@
 "use strict";
 
 const RECORD_KEY = "applicationRecord";
+const CATALOG_KEY = "applicationRecordList";
+const DEFAULT_RECORD_ID = "default";
 const DEFAULT_TITLE = "Application record";
 
-function emptyRecord() {
-  return { title: DEFAULT_TITLE, pages: [] };
+function emptyRecord(title = DEFAULT_TITLE) {
+  return { title, pages: [] };
 }
 
-async function readRecord() {
-  const stored = await chrome.storage.session.get(RECORD_KEY);
-  return stored[RECORD_KEY] || emptyRecord();
+function recordKey(id) {
+  return id === DEFAULT_RECORD_ID ? RECORD_KEY : RECORD_KEY + ":" + id;
+}
+
+async function readRecord(id = DEFAULT_RECORD_ID) {
+  const key = recordKey(id);
+  const stored = await chrome.storage.session.get(key);
+  return stored[key] || emptyRecord();
+}
+
+async function readCatalog() {
+  const stored = await chrome.storage.session.get(CATALOG_KEY);
+  if (stored[CATALOG_KEY]) return stored[CATALOG_KEY];
+  const record = await readRecord();
+  return { activeId: DEFAULT_RECORD_ID, entries: [{ id: DEFAULT_RECORD_ID, title: record.title }] };
+}
+
+function recordUrl(path, id, pageId) {
+  const url = new URL(chrome.runtime.getURL(path));
+  url.searchParams.set("record", id);
+  if (pageId) url.hash = "page-" + encodeURIComponent(pageId);
+  return url.href;
+}
+
+function initialRecordId(catalog) {
+  const id = new URL(location.href).searchParams.get("record") || catalog.activeId;
+  if (!catalog.entries.some(entry => entry.id === id)) throw new Error("This record is no longer in this browser session.");
+  return id;
 }
 
 async function changeRecord(message) {
@@ -90,7 +117,8 @@ function comparePages(page, previous) {
 }
 
 function draftFor(record) {
-  return { format: DRAFT_FORMAT, version: 1, savedAt: new Date().toISOString(), record };
+  const pages = record.pages.map(({ tabId, documentId, sourceRefs, ...page }) => page);
+  return { format: DRAFT_FORMAT, version: 1, savedAt: new Date().toISOString(), record: { ...record, pages } };
 }
 
 // A draft is data, never markup or executable configuration. Construct a fresh

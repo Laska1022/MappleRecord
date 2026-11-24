@@ -3,6 +3,7 @@
 const captureButton = document.querySelector("#capture");
 const feedback = document.querySelector("#feedback");
 let formTab;
+let recordId;
 let capturedPage;
 
 function showCount(count) {
@@ -15,9 +16,13 @@ function notice(text, error = false) {
 }
 
 async function initialize() {
-  const [tabs, record] = await Promise.all([chrome.tabs.query({ active: true, currentWindow: true }), readRecord()]);
+  const [tabs, catalog] = await Promise.all([chrome.tabs.query({ active: true, currentWindow: true }), readCatalog()]);
+  recordId = initialRecordId(catalog);
+  setupRecordPicker(catalog, recordId);
+  const record = await readRecord(recordId);
   const tab = tabs[0];
   showCount(record.pages.length);
+  document.querySelector("#review").disabled = false;
   if (tab?.url && /^https?:\/\//i.test(tab.url)) {
     formTab = tab.id;
     document.querySelector("#tab-title").textContent = tab.title || "Portal page";
@@ -34,7 +39,7 @@ captureButton.addEventListener("click", async () => {
   document.querySelector("#capture-result").hidden = true;
   notice("Reading the visible form…");
   try {
-    const result = await changeRecord({ type: "capture", tabId: formTab });
+    const result = await changeRecord({ type: "capture", tabId: formTab, recordId });
     showCount(result.count);
     capturedPage = result.pageId;
     document.querySelector("#captured-title").textContent = result.title;
@@ -57,7 +62,7 @@ captureButton.addEventListener("click", async () => {
 
 document.querySelector("#review-capture").addEventListener("click", async () => {
   try {
-    await chrome.tabs.create({ url: chrome.runtime.getURL("review.html#page-" + encodeURIComponent(capturedPage)) });
+    await chrome.tabs.create({ url: recordUrl("review.html", recordId, capturedPage) });
     window.close();
   } catch (error) {
     notice(error.message, true);
@@ -66,7 +71,7 @@ document.querySelector("#review-capture").addEventListener("click", async () => 
 
 document.querySelector("#review").addEventListener("click", async () => {
   try {
-    await chrome.runtime.openOptionsPage();
+    await chrome.tabs.create({ url: recordUrl("review.html", recordId) });
     window.close();
   } catch (error) {
     notice(error.message, true);
@@ -74,6 +79,6 @@ document.querySelector("#review").addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "session" && changes[RECORD_KEY]) showCount(changes[RECORD_KEY].newValue?.pages.length || 0);
+  if (area === "session" && changes[recordKey(recordId)]) showCount(changes[recordKey(recordId)].newValue?.pages.length || 0);
 });
 initialize().catch(error => notice(error.message, true));

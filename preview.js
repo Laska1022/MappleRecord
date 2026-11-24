@@ -7,6 +7,50 @@ const refreshButton = document.querySelector("#refresh-preview");
 let previewer;
 let rendering = false;
 let renderedRecord = "";
+let recordId;
+
+function renderChecklist(record) {
+  const list = document.querySelector("#checklist-items");
+  list.replaceChildren();
+  const groups = new Map();
+  for (const page of record.pages) {
+    const key = formIdentity(page);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(page);
+  }
+  function link(page, text) {
+    const anchor = el("a", "", text);
+    anchor.href = recordUrl("review.html", recordId, page.id);
+    return anchor;
+  }
+  for (const versions of groups.values()) {
+    const included = versions.filter(pageIncluded);
+    const ordered = versionsFor(record, versions[0]);
+    const name = page => page.title + (versions.length > 1 ? " · Version " + (ordered.indexOf(page) + 1) : "");
+    if (included.length > 1) {
+      const row = el("li", "", countText(included.length, "version") + " included for " + versions[0].title + ". ");
+      included.forEach((page, index) => {
+        if (index) row.append(", ");
+        row.append(link(page, "Version " + (ordered.indexOf(page) + 1)));
+      });
+      list.append(row);
+    }
+    for (const page of versions) {
+      const excluded = page.enabled === false ? page.items.length : page.excluded.length;
+      const notes = [...(page.warnings || [])];
+      if (excluded) notes.push(countText(excluded, "field") + " excluded.");
+      if (notes.length) {
+        const row = el("li");
+        row.append(link(page, name(page)), " — " + notes.join(" "));
+        list.append(row);
+      }
+    }
+  }
+  document.querySelector("#checklist-summary").textContent = list.childElementCount
+    ? "Review these captures or save with the current selections."
+    : "All fields are included. No capture warnings or repeated versions.";
+  document.querySelector("#export-checklist").hidden = !record.pages.length;
+}
 
 function makeDocument(record) {
   const documentNode = el("div", "pdf-document");
@@ -39,6 +83,7 @@ function makeDocument(record) {
 
 function invalidatePreview() {
   printButton.disabled = true;
+  document.querySelector("#export-checklist").hidden = true;
   document.body.classList.remove("preview-ready");
   if (!rendering) previewStatus.textContent = "Your record changed. Refresh the preview before saving.";
 }
@@ -51,7 +96,8 @@ async function buildPreview() {
   document.querySelector("#preview-error").hidden = true;
   previewStatus.textContent = "Preparing pages…";
   try {
-    const record = await readRecord();
+    const record = await readRecord(recordId);
+    renderChecklist(record);
     paperSelect.value = settingsFor(record).paper;
     document.title = record.title;
     const signature = JSON.stringify(record);
@@ -71,7 +117,7 @@ async function buildPreview() {
     content.append(makeDocument(record));
     const flow = await previewer.preview(content, [chrome.runtime.getURL("print-document.css"), chrome.runtime.getURL("print-" + paperSelect.value + ".css")], container);
     renderedRecord = signature;
-    if (JSON.stringify(await readRecord()) !== signature) {
+    if (JSON.stringify(await readRecord(recordId)) !== signature) {
       previewStatus.textContent = "Your record changed while preparing pages. Refresh the preview.";
       return;
     }
@@ -91,12 +137,19 @@ async function buildPreview() {
 
 paperSelect.addEventListener("change", async () => {
   invalidatePreview();
-  try { await changeRecord({ type: "paper", paper: paperSelect.value }); await buildPreview(); }
+  try { await changeRecord({ type: "paper", paper: paperSelect.value, recordId }); await buildPreview(); }
   catch (error) { document.querySelector("#preview-error").textContent = error.message; document.querySelector("#preview-error").hidden = false; }
 });
 refreshButton.addEventListener("click", buildPreview);
 printButton.addEventListener("click", () => { if (!printButton.disabled) window.print(); });
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "session" && changes[RECORD_KEY] && JSON.stringify(changes[RECORD_KEY].newValue || emptyRecord()) !== renderedRecord) invalidatePreview();
+  const change = changes[recordKey(recordId)];
+  if (area === "session" && change && JSON.stringify(change.newValue || emptyRecord()) !== renderedRecord) invalidatePreview();
 });
-buildPreview();
+async function initializePreview() {
+  recordId = initialRecordId(await readCatalog());
+  history.replaceState(null, "", recordUrl("preview.html", recordId));
+  document.querySelector(".back-link").href = recordUrl("review.html", recordId);
+  await buildPreview();
+}
+initializePreview().catch(error => { previewStatus.textContent = error.message; });

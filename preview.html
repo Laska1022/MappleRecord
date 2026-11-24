@@ -8,7 +8,10 @@
   <script defer src="vendor/pagedjs/paged.min.js"></script><script defer src="preview.js"></script>
 </head>
 <body>
-  <header id="preview-tools"><div><a href="review.html" class="back-link">← Back to review</a><h1>PDF preview</h1><p id="preview-status" role="status">Preparing your selected answers…</p></div><div class="preview-actions"><label for="paper">Paper size<select id="paper"><option value="letter">Letter</option><option value="a4">A4</option></select></label><button id="refresh-preview">Refresh preview</button><button id="save-pdf" disabled>Save as PDF</button></div><p class="print-tip">In the print dialog, choose Save as PDF, use the selected paper size, and turn off browser headers and footers. Only included captures and fields appear here.</p></header>
+  <header id="preview-tools"><div><a href="review.html" class="back-link">← Back to review</a><h1>PDF preview</h1><p id="preview-status" role="status">Preparing your selected answers…</p></div><div class="preview-actions"><label for="paper">Paper size<select id="paper" disabled><option value="letter">Letter</option><option value="a4">A4</option></select></label><button id="refresh-preview" disabled>Refresh preview</button><button id="save-pdf" disabled>Save as PDF</button></div><p class="print-tip">In the print dialog, choose Save as PDF, use the selected paper size, and turn off browser headers and footers. Only included captures and fields appear here.</p></header>
+  <section id="export-checklist" aria-labelledby="checklist-title" hidden>
+    <h2 id="checklist-title">Before saving your PDF</h2><p id="checklist-summary"></p><ul id="checklist-items"></ul>
+  </section>
   <p id="preview-error" role="alert" hidden></p><p id="print-guard">Prepare or refresh the PDF preview before printing.</p><div id="print-document" aria-label="Paginated PDF preview"></div>
 </body>
 </html>

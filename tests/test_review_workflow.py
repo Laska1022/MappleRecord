@@ -77,9 +77,13 @@ def main():
             with context.expect_page() as opened:
                 page.locator('#print').click()
             preview = opened.value
-            preview.wait_for_url(ORIGIN + '/preview.html')
+            preview.wait_for_url(ORIGIN + '/preview.html?record=default')
             expect(preview.locator('#save-pdf')).to_be_enabled(timeout=30000)
             expect(preview.locator('.pagedjs_page')).to_have_count(2)
+            checklist = preview.locator('#export-checklist')
+            expect(checklist).to_contain_text('collapsed section')
+            expect(checklist).to_contain_text('1 field excluded')
+            expect(checklist.get_by_role('link', name='First form')).to_have_attribute('href', ORIGIN + '/review.html?record=default#page-page-a')
             for paper, dimensions in [('letter', (612, 792)), ('a4', (595.276, 841.89))]:
                 if paper == 'a4':
                     preview.locator('#paper').select_option(paper)
@@ -91,6 +95,7 @@ def main():
                     assert value in text, (value, text)
                 assert 'EXCLUDED_SENTINEL' not in text and 'SECRET_SENTINEL' not in text
                 assert 'COLLAPSED_SENTINEL' not in text
+                assert 'Before saving your PDF' not in text
                 info = subprocess.run(['pdfinfo', '-'], input=pdf, capture_output=True, check=True).stdout.decode()
                 size = re.search(r'Page size:\s+([\d.]+) x ([\d.]+)', info)
                 assert size and all(abs(float(actual) - expected) < 1 for actual, expected in zip(size.groups(), dimensions)), info
@@ -107,6 +112,9 @@ def main():
             page.locator(f'[data-focus="{latest}-compare"]').click()
             expect(page.locator('.change-badge')).to_have_count(1)
             expect(page.locator('.previous-answer')).to_contain_text('Toronto')
+            preview.locator('#refresh-preview').click()
+            expect(checklist).to_contain_text('2 versions included')
+            expect(checklist.get_by_role('link', name='Version 2', exact=True)).to_have_attribute('href', ORIGIN + '/review.html?record=default#page-' + latest)
             page.locator(f'[data-focus="{latest}-use-version"]').click()
             expect(page.locator('[data-focus="page-a-enable"]')).not_to_be_checked()
             expect(page.locator('.page-card')).to_have_count(3)
@@ -144,7 +152,7 @@ def main():
             expect(popup.locator('#captured-count')).to_have_text('6 fields captured')
             with context.expect_page() as capture_review:
                 popup.locator('#review-capture').click()
-            expect(capture_review.value).to_have_url(re.compile(r'/review\.html#page-'))
+            expect(capture_review.value).to_have_url(re.compile(r'/review\.html\?record=default#page-'))
             output = BASE / 'test-results'
             output.mkdir(exist_ok=True)
             page.set_viewport_size({'width': 1440, 'height': 1100})

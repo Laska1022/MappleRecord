@@ -41,6 +41,17 @@ class CaptureTests(unittest.TestCase):
     def test_select_uses_label(self):
         self.assertEqual(self.field('<label>Country<select><option value="CA" selected>Canada</option></select></label>', 'Country'), 'Canada')
 
+    def test_select_preserves_real_negative_one_choices(self):
+        html = """<label>Balance<select multiple>
+            <option value="" selected>Choose a balance</option>
+            <option value="-1" selected label="Negative one">Internal name</option>
+            <option value="0" selected>Zero</option></select></label>"""
+        self.assertEqual(self.field(html, 'Balance'), 'Negative one, Zero')
+        self.assertEqual(self.field('<label>Balance<select><option value="-1">-1</option></select></label>', 'Balance'), '-1')
+
+    def test_select_negative_one_prompt_stays_unanswered(self):
+        self.assertEqual(self.field('<label>City<select><option value="-1">-- Please select --</option></select></label>', 'City'), '')
+
     def test_radio_uses_selected_label(self):
         self.assertEqual(self.field('<fieldset><legend>Married?</legend><label><input type="radio" name="m" value="Y">Yes</label><label><input type="radio" name="m" value="N" checked>No</label></fieldset>', 'Married?'), 'No')
 
@@ -70,6 +81,24 @@ class CaptureTests(unittest.TestCase):
 
     def test_hidden_input_does_not_suppress_visible_summary(self):
         self.assertEqual(self.field('<div class="form-group"><label>City</label><div class="form-control-static">Toronto<input type="hidden" name="cityId" value="123"></div></div>', 'City'), 'Toronto')
+
+    def test_hidden_nested_summary_preserves_visible_answer(self):
+        for html in [
+            '<div class="answer" aria-label="City">Toronto<span class="answer" hidden>Hidden city</span></div>',
+            '<div class="question-label">City</div><div>Toronto<span style="display:none"><output>Hidden city</output></span></div>',
+        ]:
+            with self.subTest(html=html):
+                self.assertEqual(self.capture(html).get('items'), [
+                    {'section': '', 'kind': 'field', 'label': 'City', 'value': 'Toronto'}
+                ])
+
+    def test_visible_nested_summary_is_captured_once_after_hidden_summary(self):
+        html = """<div class="answer" aria-label="Address">
+            <span class="answer" hidden>Hidden city</span>
+            <output aria-label="City">Toronto</output></div>"""
+        self.assertEqual(self.capture(html)['items'], [
+            {'section': '', 'kind': 'field', 'label': 'City', 'value': 'Toronto'}
+        ])
 
     def test_hidden_input_does_not_suppress_definition(self):
         self.assertEqual(self.field('<dl><dt>Country</dt><dd>Canada<input type="hidden" name="countryId" value="CA"></dd></dl>', 'Country'), 'Canada')
@@ -110,6 +139,14 @@ class CaptureTests(unittest.TestCase):
     def test_inline_text_is_not_split(self):
         self.assertEqual(self.field('<dl><dt>Name</dt><dd>Mc<span>Donald</span></dd></dl>', 'Name'), 'McDonald')
 
+    def test_display_contents_keeps_rendered_text_and_inline_boundaries(self):
+        html = """<div class="answer" style="display:contents" aria-label="Address">12 Street
+            <span style="display:contents">Tor<span>onto</span><span hidden>Hidden city</span></span></div>
+            <div style="display:none"><div class="answer" style="display:contents" aria-label="Private">Hidden</div></div>"""
+        self.assertEqual(self.capture(html).get('items'), [
+            {'section': '', 'kind': 'field', 'label': 'Address', 'value': '12 Street Toronto'}
+        ])
+
     def test_css_block_boundaries_and_breaks_preserved(self):
         self.assertEqual(self.field('<dl><dt>Address</dt><dd>Street<span style="display:block">City</span>Province<br>Canada</dd></dl>', 'Address'), 'Street City Province Canada')
 
@@ -141,6 +178,14 @@ class CaptureTests(unittest.TestCase):
     def test_editable_table_cell_captured(self):
         result = self.capture('<table><tr><th>Notes</th></tr><tr><td contenteditable>Some notes</td></tr></table>')
         self.assertEqual(result['items'][0]['rows'][1][0]['text'], 'Some notes')
+
+    def test_table_cell_interleaves_labels_with_control_answers(self):
+        html = """<table><tr><td>From <input value="Toronto"> to
+            <span role="combobox"><input value="Ottawa"></span><input type="hidden" value="Hidden">
+            via <select><option value="-1" selected>Route A</option></select>
+            <label><input type="checkbox" checked> Confirmed</label></td></tr></table>"""
+        self.assertEqual(self.capture(html)['items'][0]['rows'][0][0]['text'],
+                         'From Toronto to Ottawa via Route A Checked Confirmed')
 
     def test_visible_frames_report_incomplete_capture(self):
         result = self.capture('<label>Name<input value="Alice"></label><iframe title="Embedded form" srcdoc="<input value=Bob>"></iframe><iframe hidden></iframe>')
