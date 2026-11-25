@@ -42,7 +42,8 @@ function captureForm(portalValues, captureId) {
       if (part.nodeType === Node.TEXT_NODE) {
         tokens.push(part.textContent);
       } else if (part.nodeType === Node.ELEMENT_NODE) {
-        if (part.matches(control) && !(allowRootControl && part === node)) {
+        const rootControl = allowRootControl && part === node;
+        if (part.matches(control) && !rootControl) {
           if (includeControlValues && safeControl(part)) {
             const value = answer(part);
             if (value) {
@@ -52,7 +53,7 @@ function captureForm(portalValues, captureId) {
           }
           return;
         }
-        if (part.matches(ignore + ",button,[role=button]")) return;
+        if (part.matches(ignore) || (!rootControl && part.matches("button,[role=button]"))) return;
         if (part !== node && !visible(part)) return;
         // Preserve rendered line boundaries without splitting adjacent inline text.
         const block = /^(block|flow-root|list-item|flex|grid|table(?:-.+)?)$/.test(getComputedStyle(part).display);
@@ -109,7 +110,8 @@ function captureForm(portalValues, captureId) {
   }
 
   function safeControl(node) {
-    return !skipTypes.has(node.type) && !credential(node) && visible(node);
+    const buttonCombobox = node.matches('button[role="combobox"],input[type="button"][role="combobox"]');
+    return (!skipTypes.has(node.type) || buttonCombobox) && !credential(node) && visible(node);
   }
 
   function hasVisibleControl(node) {

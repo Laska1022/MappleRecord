@@ -79,6 +79,21 @@ class CaptureTests(unittest.TestCase):
     def test_visible_combobox_input(self):
         self.assertEqual(self.field('<div role="combobox" aria-label="Country"><input value="Canada"></div>', 'Country'), 'Canada')
 
+    def test_button_combobox_captures_its_visible_answer(self):
+        html = """<label for="country">Country</label>
+            <button id="country" type="button" role="combobox" aria-expanded="false">
+              <span>Canada</span><span hidden>Internal code</span></button>
+            <input type="button" role="combobox" aria-label="City" value="Toronto">
+            <button type="button">Continue</button>"""
+        self.assertEqual(self.capture(html).get('items'), [
+            {'kind': 'field', 'section': '', 'label': 'Country', 'value': 'Canada'},
+            {'kind': 'field', 'section': '', 'label': 'City', 'value': 'Toronto'}
+        ])
+
+    def test_table_captures_button_combobox_with_default_button_type(self):
+        result = self.capture('<table><tr><td>Country: <button role="combobox" aria-valuetext="Canada">CA</button></td></tr></table>')
+        self.assertEqual(result['items'][0]['rows'][0][0]['text'], 'Country: Canada')
+
     def test_hidden_input_does_not_suppress_visible_summary(self):
         self.assertEqual(self.field('<div class="form-group"><label>City</label><div class="form-control-static">Toronto<input type="hidden" name="cityId" value="123"></div></div>', 'City'), 'Toronto')
 

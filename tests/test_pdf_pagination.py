@@ -43,7 +43,11 @@ def main():
             page['items'] = [{'kind': 'table', 'section': '', 'label': 'Large entry', 'rows': [[{'text': 'History', 'header': True, 'colSpan': 1, 'rowSpan': 1}], [large_cell]]}]
             page['layouts'] = {'0': 'table'}
             draft = {'format': 'MapleRecord', 'version': 1, 'record': {'title': 'Long cell', 'pages': [page]}}
-            preview.evaluate("async draft => chrome.runtime.sendMessage({type:'restore',draft})", draft)
+            preview.evaluate("""async draft => {
+                const request = {type: 'restore', draft};
+                const {confirmation} = await changeRecord(request);
+                await changeRecord({...request, confirmedState: confirmation.state});
+            }""", draft)
             preview.locator('#refresh-preview').click()
             expect(preview.locator('#save-pdf')).to_be_enabled(timeout=30000)
             pdf = preview.pdf(prefer_css_page_size=True)

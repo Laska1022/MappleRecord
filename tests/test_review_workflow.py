@@ -11,7 +11,7 @@ FIXTURE = """
 <main><h1>First form</h1>
   <label>Excluded field<input value="EXCLUDED_SENTINEL"></label>
   <div class="form-group"><label>City</label><div class="form-control-static">Toronto<input type="hidden" value="SECRET_SENTINEL"></div></div>
-  <div role="combobox" aria-label="Country" aria-valuetext="Canada"><span>Canada</span><input type="hidden" value="CA"></div>
+  <button type="button" role="combobox" aria-label="Country"><span>New Zealand</span></button>
   <div class="form-group"><label>Address</label><div class="form-control-static"><div>123 Main Street</div><div>Toronto</div><div>Ontario</div></div></div>
   <table><tr><th>Country</th></tr><tr><td><div role="combobox"><input value="Canada"></div></td></tr></table>
   <div aria-label="Notes" contenteditable>Some notes</div>
@@ -91,7 +91,7 @@ def main():
                     expect(preview.locator('#save-pdf')).to_be_enabled()
                 pdf = preview.pdf(prefer_css_page_size=True, print_background=True)
                 text = ' '.join(subprocess.run(['pdftotext', '-', '-'], input=pdf, capture_output=True, check=True).stdout.decode().split())
-                for value in ['Renamed record', 'Toronto', 'Canada', '123 Main Street Toronto Ontario', 'Some notes', 'Smith', 'Page 1 of 2', 'Page 2 of 2']:
+                for value in ['Renamed record', 'Toronto', 'Canada', 'New Zealand', '123 Main Street Toronto Ontario', 'Some notes', 'Smith', 'Page 1 of 2', 'Page 2 of 2']:
                     assert value in text, (value, text)
                 assert 'EXCLUDED_SENTINEL' not in text and 'SECRET_SENTINEL' not in text
                 assert 'COLLAPSED_SENTINEL' not in text
@@ -136,7 +136,28 @@ def main():
             page.locator('#confirm').click()
             expect(page.locator('#empty')).to_be_visible()
             expect(page.locator('#print')).to_be_disabled()
+            # Queue a restore while the empty review is still waiting for a capture to finish.
+            page.evaluate("""() => {
+                const inject = chrome.scripting.executeScript;
+                chrome.scripting.executeScript = async args => {
+                    chrome.scripting.executeScript = inject;
+                    await new Promise(resolve => { window.finishCapture = resolve; });
+                    return inject(args);
+                };
+                window.captureDone = changeRecord({type: 'capture', tabId: 1});
+            }""")
+            page.wait_for_function('typeof finishCapture === "function"')
             page.locator('#draft-file').set_input_files({'name': 'record.json', 'mimeType': 'application/json', 'buffer': json.dumps(draft).encode()})
+            # The pending restore disables the file picker after sending its worker request.
+            expect(page.locator('#load-draft')).to_be_disabled()
+            page.evaluate('() => { finishCapture(); return captureDone; }')
+            expect(page.locator('#edit-dialog')).to_be_visible()
+            expect(page.locator('#dialog-detail')).to_contain_text('1 captured page in this record')
+            page.locator('#cancel').click()
+            expect(page.locator('.page-card')).to_have_count(1)
+            page.locator('#draft-file').set_input_files({'name': 'record.json', 'mimeType': 'application/json', 'buffer': json.dumps(draft).encode()})
+            expect(page.locator('#edit-dialog')).to_be_visible()
+            page.locator('#confirm').click()
             expect(page.locator('.page-card')).to_have_count(3)
             expect(page.locator('[data-focus="page-a-enable"]')).not_to_be_checked()
             page.locator('[data-focus="page-a-remove"]').click()

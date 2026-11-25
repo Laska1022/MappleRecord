@@ -38,8 +38,12 @@ async function change(message) {
   $("#feedback").textContent = "";
   $("#feedback").classList.remove("error");
   try {
-    await changeRecord({ ...message, recordId });
+    const reply = await changeRecord({ ...message, recordId });
     render(await readRecord(recordId));
+    if (reply.confirmation) {
+      ask("restore", null, message.draft, reply.confirmation);
+      return false;
+    }
     return true;
   } catch (error) {
     showError(error.message);
@@ -51,13 +55,13 @@ async function change(message) {
   }
 }
 
-function ask(action, page, draft) {
-  dialogAction = { type: action, pageId: page?.id, draft };
+function ask(action, page, draft, confirmation) {
+  dialogAction = { type: action, pageId: page?.id, draft, confirmedState: confirmation?.state };
   const rename = action === "rename";
   $("#dialog-title").textContent = rename ? "Rename record" : action === "clear" ? "Clear this record?" : action === "restore" ? "Replace this record?" : "Remove this capture?";
   $("#dialog-detail").textContent = rename ? "This title will appear on the PDF." : action === "clear"
     ? "All captures in this record will be removed. Download a draft first if you want to keep them."
-    : action === "restore" ? "Restore " + countText(draft.record.pages.length, "captured page") + " from this draft? This replaces the current session record."
+    : action === "restore" ? "Replace the " + countText(confirmation.count, "captured page") + " in this record with " + countText(draft.record.pages.length, "captured page") + " from the draft?"
     : "“" + page.title + "” will be removed. Other versions will stay in your record.";
   $("#title-label").hidden = $("#title-input").hidden = !rename;
   $("#title-input").value = record.title;
@@ -71,8 +75,13 @@ function ask(action, page, draft) {
 
 $("#cancel").addEventListener("click", () => dialog.close("cancel"));
 dialog.addEventListener("close", () => {
-  if (dialog.returnValue === "confirm") change({ ...dialogAction, title: $("#title-input").value });
-  dialogAction = undefined;
+  if (!dialog.open) dialogAction = undefined;
+});
+dialog.querySelector("form").addEventListener("submit", event => {
+  event.preventDefault();
+  const message = { ...dialogAction, title: $("#title-input").value };
+  dialog.close("confirm");
+  change(message);
 });
 $("#clear").addEventListener("click", () => ask("clear"));
 $("#rename").addEventListener("click", () => ask("rename"));
@@ -108,9 +117,7 @@ $("#draft-file").addEventListener("change", async event => {
     let draft;
     try { draft = JSON.parse(await file.text()); }
     catch { throw new Error("This file could not be read. Choose a Maple Record JSON draft."); }
-    validateDraft(draft);
-    if (record.pages.length) ask("restore", null, draft);
-    else await change({ type: "restore", draft });
+    await change({ type: "restore", draft });
   } catch (error) { showError(error.message); }
 });
 

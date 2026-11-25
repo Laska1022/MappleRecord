@@ -71,7 +71,18 @@ async function update(message) {
     else await chrome.storage.session.set({ [key]: emptyRecord(entry.title) });
     return;
   }
-  const record = message.type === "restore" ? validateDraft(message.draft) : await readRecord(id);
+  let record = await readRecord(id);
+  if (message.type === "restore") {
+    const restored = validateDraft(message.draft);
+    if (record.pages.length) {
+      // Check inside the writer queue and bind confirmation to the state being replaced.
+      const bytes = new TextEncoder().encode(JSON.stringify(record));
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const state = new Uint8Array(digest).join(".");
+      if (message.confirmedState !== state) return { confirmation: { state, count: record.pages.length } };
+    }
+    record = restored;
+  }
   if (message.type === "rename" || message.type === "restore") {
     if (message.type === "rename") record.title = message.title.trim().slice(0, 160) || DEFAULT_TITLE;
     entry.title = record.title;

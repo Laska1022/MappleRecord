@@ -13,6 +13,7 @@ function worker(options = {}) {
   const frame = options.frame || {documentId:'doc-1',result:{title:'Form',source:'fixture.test',items:[{section:'',kind:'field',label:'Name',value:'Alice'}]}};
   const context = vm.createContext({
     crypto:webcrypto,
+    TextEncoder,
     fetch:async()=>({ok:true,json:async()=>({8536:'Acme'})}),
     chrome:{runtime:{id:'test-extension',getURL:name=>'chrome-extension://test-extension/'+name,onMessage:{addListener:fn=>listener=fn}},
       scripting:{executeScript:async()=>{if(options.injectionError)throw new Error('Cannot access page');return [structuredClone(frame)];}},
@@ -117,5 +118,36 @@ test('invalid restore leaves current data intact and valid restore replaces it',
   const w=worker();await w.send({type:'capture',tabId:1});const before=w.read();
   assert.equal((await w.send({type:'restore',draft:{format:'wrong'}})).ok,false);assert.deepEqual(w.read(),before);
   const draft={format:'MapleRecord',version:1,record:{...before,title:'Restored title',settings:{paper:'a4'}}};
-  await w.send({type:'restore',draft});assert.equal(w.read().title,'Restored title');assert.equal(w.read().pages.length,1);
+  const request = await w.send({type:'restore', draft});
+  assert.deepEqual(w.read(), before);
+  await w.send({type:'restore', draft, confirmedState:request.confirmation.state});
+  assert.equal(w.read().title,'Restored title');assert.equal(w.read().pages.length,1);
+});
+
+test('restore checks the queued record and asks again if it changes before confirmation', async () => {
+  const w = worker();
+  const draft = {format:'MapleRecord', version:1, record:{title:'Saved draft', pages:[]}};
+  const restore = {type:'restore', draft};
+  const [capture, first] = await Promise.all([w.send({type:'capture', tabId:1}), w.send(restore)]);
+  assert.equal(capture.ok, true);
+  assert.equal(w.read().pages.length, 1);
+  assert.equal(first.confirmation.count, 1);
+  w.frame.result.items[0].value = 'Bob';
+  await w.send({type:'capture', tabId:1});
+  const next = await w.send({...restore, confirmedState:first.confirmation.state});
+  assert.equal(w.read().pages.length, 2);
+  assert.equal(next.confirmation.count, 2);
+  assert.notEqual(next.confirmation.state, first.confirmation.state);
+  assert.equal((await w.send({...restore, confirmedState:next.confirmation.state})).ok, true);
+  assert.equal(w.read().title, 'Saved draft');
+  assert.equal(w.read().pages.length, 0);
+});
+
+test('restore into an empty record completes without confirmation', async () => {
+  const w = worker();
+  const draft = {format:'MapleRecord', version:1, record:{title:'Restored directly', pages:[]}};
+  const reply = await w.send({type:'restore', draft});
+  assert.equal(reply.ok, true);
+  assert.equal(reply.confirmation, undefined);
+  assert.equal(w.read().title, 'Restored directly');
 });
