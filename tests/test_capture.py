@@ -115,6 +115,25 @@ class CaptureTests(unittest.TestCase):
             {'section': '', 'kind': 'field', 'label': 'City', 'value': 'Toronto'}
         ])
 
+    def test_nested_address_preserves_outer_and_inner_text_once(self):
+        for city_label in ['', 'aria-label="City"']:
+            with self.subTest(city_label=city_label):
+                html = f"""<div class="answer" aria-label="Address">12 Main Street,
+                    <span><span class="answer" {city_label}>Toronto</span></span><span hidden>Old city</span></div>"""
+                self.assertEqual(self.capture(html).get('items'), [
+                    {'section': '', 'kind': 'field', 'label': 'Address', 'value': '12 Main Street, Toronto'}
+                ])
+
+    def test_nested_summary_inherits_outer_label_for_unlabelled_fragment(self):
+        html = '<div class="answer" aria-label="City"><span class="answer">Toronto</span></div>'
+        self.assertEqual(self.field(html, 'City'), 'Toronto')
+
+    def test_question_label_keeps_text_around_nested_city(self):
+        html = '<div class="question-label">Address</div><div>12 Main Street, <output>Toronto</output></div>'
+        self.assertEqual(self.capture(html).get('items'), [
+            {'section': '', 'kind': 'field', 'label': 'Address', 'value': '12 Main Street, Toronto'}
+        ])
+
     def test_hidden_input_does_not_suppress_definition(self):
         self.assertEqual(self.field('<dl><dt>Country</dt><dd>Canada<input type="hidden" name="countryId" value="CA"></dd></dl>', 'Country'), 'Canada')
 

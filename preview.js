@@ -6,7 +6,8 @@ const paperSelect = document.querySelector("#paper");
 const refreshButton = document.querySelector("#refresh-preview");
 let previewer;
 let rendering = false;
-let renderedRecord = "";
+let generation = 0;
+let previewSignature = "";
 let recordId;
 
 function renderChecklist(record) {
@@ -82,54 +83,67 @@ function makeDocument(record) {
 }
 
 function invalidatePreview() {
+  generation++;
+  previewSignature = "";
   printButton.disabled = true;
   document.querySelector("#export-checklist").hidden = true;
+  document.querySelector("#checklist-items").replaceChildren();
+  document.querySelector("#print-document").replaceChildren();
+  document.title = "PDF preview · Maple Record";
   document.body.classList.remove("preview-ready");
-  if (!rendering) previewStatus.textContent = "Your record changed. Refresh the preview before saving.";
+  previewStatus.textContent = "Your record changed. Refresh the preview before saving.";
 }
 
 async function buildPreview() {
   if (rendering) return;
+  invalidatePreview();
+  const requestedGeneration = generation;
   rendering = true;
   printButton.disabled = paperSelect.disabled = refreshButton.disabled = true;
-  document.body.classList.remove("preview-ready");
   document.querySelector("#preview-error").hidden = true;
   previewStatus.textContent = "Preparing pages…";
+  const layout = el("div", "preview-layout");
+  layout.inert = true;
   try {
     const record = await readRecord(recordId);
-    renderChecklist(record);
+    if (requestedGeneration !== generation) return;
     paperSelect.value = settingsFor(record).paper;
-    document.title = record.title;
-    const signature = JSON.stringify(record);
+    previewSignature = JSON.stringify(record);
     if (previewer) {
       previewer.polisher.destroy();
-      previewer.chunker.destroy();
+      if (previewer.chunker.pagesArea) previewer.chunker.destroy();
+      previewer = undefined;
     }
-    const container = document.querySelector("#print-document");
-    container.replaceChildren();
     if (!record.pages.some(pageIncluded)) {
+      renderChecklist(record);
       previewStatus.textContent = "No fields selected. Return to review and include a capture or section.";
-      renderedRecord = signature;
       return;
     }
     previewer = new PagedModule.Previewer();
     const content = document.createDocumentFragment();
     content.append(makeDocument(record));
-    const flow = await previewer.preview(content, [chrome.runtime.getURL("print-document.css"), chrome.runtime.getURL("print-" + paperSelect.value + ".css")], container);
-    renderedRecord = signature;
-    if (JSON.stringify(await readRecord(recordId)) !== signature) {
-      previewStatus.textContent = "Your record changed while preparing pages. Refresh the preview.";
+    // Paged.js needs a laid-out document. Publish its pages only if this build is still current.
+    document.body.append(layout);
+    const flow = await previewer.preview(content, [chrome.runtime.getURL("print-document.css"), chrome.runtime.getURL("print-" + paperSelect.value + ".css")], layout);
+    const latest = await readRecord(recordId);
+    if (requestedGeneration !== generation || JSON.stringify(latest) !== previewSignature) {
+      invalidatePreview();
       return;
     }
+    document.querySelector("#print-document").replaceChildren(...layout.childNodes);
+    renderChecklist(record);
+    document.title = record.title;
     previewStatus.textContent = countText(flow.total, "page") + " · " + (paperSelect.value === "a4" ? "A4" : "Letter") + " · Included answers only";
     document.body.classList.add("preview-ready");
     printButton.disabled = false;
   } catch (error) {
+    if (requestedGeneration !== generation) return;
     const feedback = document.querySelector("#preview-error");
     feedback.textContent = "Could not prepare the preview. " + error.message;
     feedback.hidden = false;
     previewStatus.textContent = "Preview unavailable. Try refreshing.";
   } finally {
+    layout.remove();
     rendering = false;
     paperSelect.disabled = refreshButton.disabled = false;
   }
@@ -144,7 +158,7 @@ refreshButton.addEventListener("click", buildPreview);
 printButton.addEventListener("click", () => { if (!printButton.disabled) window.print(); });
 chrome.storage.onChanged.addListener((changes, area) => {
   const change = changes[recordKey(recordId)];
-  if (area === "session" && change && JSON.stringify(change.newValue || emptyRecord()) !== renderedRecord) invalidatePreview();
+  if (area === "session" && change && JSON.stringify(change.newValue || emptyRecord()) !== previewSignature) invalidatePreview();
 });
 async function initializePreview() {
   recordId = initialRecordId(await readCatalog());

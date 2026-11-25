@@ -12,7 +12,7 @@ FIXTURE = """
   <label>Excluded field<input value="EXCLUDED_SENTINEL"></label>
   <div class="form-group"><label>City</label><div class="form-control-static">Toronto<input type="hidden" value="SECRET_SENTINEL"></div></div>
   <button type="button" role="combobox" aria-label="Country"><span>New Zealand</span></button>
-  <div class="form-group"><label>Address</label><div class="form-control-static"><div>123 Main Street</div><div>Toronto</div><div>Ontario</div></div></div>
+  <div class="form-group"><label>Address</label><div class="form-control-static"><div>123 Main Street</div><div class="answer" aria-label="City">Toronto</div><div>Ontario</div></div></div>
   <table><tr><th>Country</th></tr><tr><td><div role="combobox"><input value="Canada"></div></td></tr></table>
   <div aria-label="Notes" contenteditable>Some notes</div>
   <details><summary>Previous address</summary><label>Street<input value="COLLAPSED_SENTINEL"></label></details>

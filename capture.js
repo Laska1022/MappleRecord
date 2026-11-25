@@ -1,7 +1,7 @@
 "use strict";
 
 // Chrome serializes this function into the active tab's isolated world.
-function captureForm(portalValues, captureId) {
+function captureForm(portalValues, captureId, locateRef) {
   const root = document.querySelector("#webForm") || document.querySelector("main, [role=main]") || document.body;
   // A closed disclosure renders only its first direct summary.
   const closedDetailsBody = "details:not([open]) > :not(summary:first-of-type)";
@@ -30,7 +30,7 @@ function captureForm(portalValues, captureId) {
     });
   }
 
-  function readable(node, { allowRootControl = false, includeControlValues = false } = {}) {
+  function readable(node, { allowRootControl = false, includeControlValues = false, skipNestedSummaries = false } = {}) {
     const tokens = [];
     const pieces = [];
     function flushText() {
@@ -42,6 +42,7 @@ function captureForm(portalValues, captureId) {
       if (part.nodeType === Node.TEXT_NODE) {
         tokens.push(part.textContent);
       } else if (part.nodeType === Node.ELEMENT_NODE) {
+        if (skipNestedSummaries && part !== node && part.matches(summary)) return;
         const rootControl = allowRootControl && part === node;
         if (part.matches(control) && !rootControl) {
           if (includeControlValues && safeControl(part)) {
@@ -98,6 +99,10 @@ function captureForm(portalValues, captureId) {
     return group && (labelledBy(group) || normalize(group.getAttribute("aria-label")) ||
       readable(group.querySelector(".question-label")) || readable(group.querySelector(".question-description")) ||
       (allowOptionLabel && readable(group.querySelector("label"))));
+  }
+
+  function summaryLabel(node) {
+    return label(node) || portalLabel(node) || readable(node.previousElementSibling);
   }
 
   function groupLabel(node) {
@@ -179,19 +184,48 @@ function captureForm(portalValues, captureId) {
   const title = readable(heading) || normalize(document.title) || "Portal form";
 
   const sourceRefs = [];
-  function add(item, element) {
+  let highlightTarget;
+  // Recompute the question with the capture rules: a live DOM node can be repurposed.
+  function sameQuestion(ref, item, element) {
+    return ref && ref.url === location.href && ref.title === title && ref.section === section &&
+      ref.kind === item.kind && ref.label === item.label && ref.fieldName === element.getAttribute("name");
+  }
+
+  function add(item, element, radioGroup) {
     if (!item) return;
+    if (locateRef) {
+      for (const candidate of radioGroup || [element]) {
+        const ref = globalThis.mapleRecordSources?.get(candidate);
+        if (ref?.id === locateRef && sameQuestion(ref, item, candidate)) highlightTarget = candidate;
+      }
+      return;
+    }
     if (captureId) {
       // This map lives in Chrome's isolated world and releases detached elements.
       const sources = globalThis.mapleRecordSources ??= new WeakMap();
       let ref = sources.get(element);
-      if (!ref || ref.url !== location.href || ref.label !== item.label || ref.section !== section) {
-        ref = { id: captureId + ":" + items.length, url: location.href, label: item.label, section };
+      if (!sameQuestion(ref, item, element)) {
+        ref = { id: captureId + ":" + items.length, url: location.href, title, label: item.label,
+          section, kind: item.kind, fieldName: element.getAttribute("name") };
         sources.set(element, ref);
       }
       sourceRefs.push(ref.id);
     }
     items.push({ section, ...item });
+  }
+
+  function addSummary(node, name, keepEmpty) {
+    const nested = [...node.querySelectorAll(summary)].filter(visible);
+    // A wrapper containing only individually named answers delegates to them.
+    // When the wrapper contributes answer text, capture the whole value once.
+    const hasOuterText = nested.length > 0 && Boolean(readable(node, { skipNestedSummaries: true }));
+    if (nested.length && !hasOuterText && nested.every(summaryLabel)) return;
+    const field = name || (hasOuterText ? "Unlabelled field" : "");
+    const value = readable(node);
+    if (field && (value || keepEmpty)) {
+      add({ kind: "field", label: field, value }, node);
+      nested.forEach(child => handled.add(child));
+    }
   }
 
   const radios = [...root.querySelectorAll('input[type=radio]')].filter(safeControl);
@@ -209,7 +243,7 @@ function captureForm(portalValues, captureId) {
         siblings.forEach(other => handled.add(other));
         const selected = siblings.find(other => other.checked);
         add({ kind: "field", label: groupLabel(node) || node.name || controlLabel(node),
-          value: selected ? label(selected) || selected.value : "" }, selected || node);
+          value: selected ? label(selected) || selected.value : "" }, selected || node, siblings);
       } else {
         const field = controlLabel(node);
         const group = node.type === "checkbox" ? groupLabel(node) : "";
@@ -232,16 +266,29 @@ function captureForm(portalValues, captureId) {
     } else if (node.matches(".question-label")) {
       const sibling = node.nextElementSibling;
       const group = node.closest(".eapp-question-and-answer, .form-group");
-      const structured = [summary, "table,dl,button,label,.eapp-question-and-answer,.question-label,.question-description,.help-block"].join(",");
+      const structured = "table,dl,button,label,.eapp-question-and-answer,.question-label,.question-description,.help-block";
       if (!hasVisibleControl(group) && sibling && visible(sibling) && !hasVisibleControl(sibling) &&
-          !sibling.matches(control + "," + structured) && !hasVisibleDescendant(sibling, structured)) {
-        const value = readable(sibling);
-        if (value) add({ kind: "field", label: readable(node), value }, sibling);
+          !sibling.matches([control, summary, structured].join(",")) && !hasVisibleDescendant(sibling, structured)) {
+        addSummary(sibling, readable(node), false);
       }
-    } else if (!hasVisibleControl(node) && !hasVisibleDescendant(node, summary)) {
-      const name = label(node) || portalLabel(node) || readable(node.previousElementSibling);
-      if (name) add({ kind: "field", label: name, value: readable(node) }, node);
+    } else if (!hasVisibleControl(node)) {
+      addSummary(node, summaryLabel(node), true);
     }
+    if (highlightTarget) break;
+  }
+  if (locateRef) {
+    if (!highlightTarget) return false;
+    const range = document.createRange();
+    range.selectNodeContents(highlightTarget);
+    const rect = highlightTarget.getBoundingClientRect();
+    const bounds = rect.width ? rect : range.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return false;
+    const target = highlightTarget.getClientRects().length ? highlightTarget : highlightTarget.parentElement;
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    target.animate([{ outline: "4px solid #c86518", outlineOffset: "3px" },
+      { outline: "4px solid #c86518", outlineOffset: "3px", offset: 0.85 },
+      { outline: "4px solid transparent", outlineOffset: "3px" }], 3500);
+    return true;
   }
   const warnings = [];
   const frames = [...root.querySelectorAll("iframe,frame")].filter(visible).length;
@@ -257,27 +304,4 @@ function captureForm(portalValues, captureId) {
   if (collapsed.size) warnings.push(collapsed.size + " collapsed section" + (collapsed.size === 1 ? " may contain" : "s may contain") + " more answers. Expand the sections you need, then capture this page again.");
   if (!items.length) return { error: "No form data found. Open an application form or review page and expand the sections you need." + (warnings.length ? " " + warnings.join(" ") : "") };
   return { title, source: location.hostname, sourcePath: location.pathname, items, warnings, ...(captureId ? { sourceRefs } : {}) };
-}
-
-// Chrome injects this function into the same isolated world as captureForm.
-function highlightSource(refId) {
-  const sources = globalThis.mapleRecordSources;
-  if (!sources) return false;
-  for (const element of document.querySelectorAll("*")) {
-    const ref = sources.get(element);
-    if (ref?.id !== refId || ref.url !== location.href) continue;
-    if (element.closest('[hidden],[inert],[aria-hidden="true"],details:not([open]) > :not(summary:first-of-type)') ||
-        getComputedStyle(element).visibility !== "visible") return false;
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const rect = element.getBoundingClientRect().width ? element.getBoundingClientRect() : range.getBoundingClientRect();
-    if (!rect.width || !rect.height) return false;
-    const target = element.getClientRects().length ? element : element.parentElement;
-    target.scrollIntoView({ block: "center", inline: "nearest" });
-    target.animate([{ outline: "4px solid #c86518", outlineOffset: "3px" },
-      { outline: "4px solid #c86518", outlineOffset: "3px", offset: 0.85 },
-      { outline: "4px solid transparent", outlineOffset: "3px" }], 3500);
-    return true;
-  }
-  return false;
 }

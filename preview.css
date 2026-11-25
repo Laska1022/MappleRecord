@@ -13,6 +13,7 @@ button:disabled { cursor: default; opacity: .5; }
 #save-pdf { background: #245548; border-color: #245548; color: white; font-weight: 600; }
 .print-tip { flex-basis: 100%; margin: 0; font-size: 11px; color: #586a60; }
 #print-document { overflow-x: auto; padding: 28px 16px; }
+.preview-layout { position: absolute; inset: 0 0 auto; opacity: 0; pointer-events: none; }
 .pagedjs_pages { display: flex; flex-direction: column; align-items: center; gap: 24px; min-width: max-content; }
 .pagedjs_page { background: white; box-shadow: 0 3px 20px #25352e22; flex: none; }
 #preview-error { color: #994333; padding: 16px 32px; }
@@ -20,7 +21,7 @@ button:disabled { cursor: default; opacity: .5; }
 :focus-visible { outline: 3px solid #a75b30; outline-offset: 3px; }
 @media print {
   body { background: white; }
-  #preview-tools,#preview-error { display: none !important; }
+  #preview-tools,#preview-error,.preview-layout { display: none !important; }
   #print-document { display: block; overflow: visible; padding: 0; }
   .pagedjs_pages { display: block; }
   .pagedjs_page { margin: 0; box-shadow: none; break-after: page; }

@@ -25,7 +25,7 @@ def main():
             patch = """() => {
                 chrome.scripting.executeScript = async ({target, func, args}) => {
                     if (target.tabId !== 1) throw Error('Unexpected source tab');
-                    if (func.name === 'highlightSource' && target.documentIds?.[0] !== 'form-document')
+                    if (args[2] && target.documentIds?.[0] !== 'form-document')
                         throw Error('Unexpected source document');
                     return [{documentId: 'form-document', result: window.opener[func.name](...args)}];
                 };
@@ -66,6 +66,16 @@ def main():
             expect(preview.locator('#save-pdf')).to_be_enabled()
             expect(preview.locator('#print-document')).to_contain_text('Ottawa')
 
+            # A new value is still the same question. A reused input with a new label is not.
+            source.locator('input').evaluate('node => node.getAnimations().forEach(animation => animation.cancel())')
+            review.get_by_role('button', name='Show City on the original form').click()
+            assert source.locator('input').evaluate('node => node.getAnimations().length > 0')
+            source.locator('input').evaluate('node => node.getAnimations().forEach(animation => animation.cancel())')
+            source.locator('label').evaluate("node => node.firstChild.textContent = 'Employer city'")
+            review.get_by_role('button', name='Show City on the original form').click()
+            expect(review.locator('.source-status')).to_contain_text('original field is unavailable')
+            assert source.locator('input').evaluate('node => node.getAnimations().length === 0')
+
             with second.expect_download() as download:
                 second.locator('#save-draft').click()
             draft = Path(download.value.path()).read_text()
@@ -76,9 +86,35 @@ def main():
             expect(second.locator('#record-title')).to_have_text('Second applicant')
             second.locator('#record-picker select').select_option(label='First applicant')
             expect(second.locator('.answer')).to_have_text('Ottawa')
+            source.locator('label').evaluate("node => node.firstChild.textContent = 'City'")
             source.locator('input').evaluate('node => node.replaceWith(node.cloneNode())')
             review.get_by_role('button', name='Show City on the original form').click()
             expect(review.locator('.source-status')).to_contain_text('original field is unavailable')
+            building = ctx.new_page()
+            building.goto(preview.url)
+            expect(building.locator('#save-pdf')).to_be_enabled()
+            building.evaluate("""() => {
+                const paginate = PagedModule.Previewer.prototype.preview;
+                PagedModule.Previewer.prototype.preview = async function (...args) {
+                    const flow = await paginate.apply(this, args);
+                    await new Promise(resolve => { window.finishLayout = resolve; });
+                    return flow;
+                };
+            }""")
+            building.locator('#refresh-preview').click()
+            building.wait_for_function("typeof finishLayout === 'function'")
+            review.locator('#clear').click()
+            review.locator('#confirm').click()
+            expect(preview.locator('#save-pdf')).to_be_disabled()
+            expect(preview.locator('#print-document')).to_be_empty()
+            expect(building.locator('#preview-status')).to_contain_text('record changed')
+            expect(building.locator('#print-document')).to_be_empty()
+            building.evaluate('() => finishLayout()')
+            expect(building.locator('#refresh-preview')).to_be_enabled()
+            expect(building.locator('#save-pdf')).to_be_disabled()
+            expect(building.locator('.pagedjs_page')).to_have_count(0)
+            building.locator('#refresh-preview').click()
+            expect(building.locator('#preview-status')).to_contain_text('No fields selected')
             print('PASS: named records, pinned review and PDF, draft isolation, source highlight and replaced-field handling.')
         finally:
             browser.close()

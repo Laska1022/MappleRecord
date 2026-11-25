@@ -102,7 +102,7 @@ async function update(message) {
         try {
           if (!ref || !page.documentId || !Number.isInteger(page.tabId)) throw new Error();
           const [frame] = await chrome.scripting.executeScript({
-            target: { tabId: page.tabId, documentIds: [page.documentId] }, func: highlightSource, args: [ref]
+            target: { tabId: page.tabId, documentIds: [page.documentId] }, func: captureForm, args: [{}, null, ref]
           });
           if (frame?.result !== true) throw new Error();
           const tab = await chrome.tabs.update(page.tabId, { active: true });
